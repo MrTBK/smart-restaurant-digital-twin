@@ -2,6 +2,8 @@
 
 > **A real-time 3D Computer Vision & IoT Digital Twin for smart restaurant operations, synthetic YOLOv8 pose estimation, autonomous AGV delivery robotics, multi-camera CCTV monitoring, and executive predictive analytics.**
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Hosted_on_GitHub_Pages-2ea44f?style=for-the-badge&logo=github)](https://mrtbk.github.io/smart-restaurant-digital-twin/)
+
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black?logo=three.js)](https://threejs.org/)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![Computer Vision](https://img.shields.io/badge/Vision-YOLOv8_Pose-emerald)](https://github.com/ultralytics)
