@@ -1,0 +1,3473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniSight AI-CCTV & IoT Digital Twin | Smart Restaurant Operations & Robotics</title>
+
+  <!-- Google Fonts: Outfit (modern display) & JetBrains Mono (data/telemetry) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              emerald: '#10B981',
+              red: '#EF4444',
+              blue: '#3B82F6',
+              purple: '#8B5CF6',
+              amber: '#F59E0B',
+              rose: '#F43F5E',
+              cyan: '#06B6D4',
+              slate: '#0F172A',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Three.js, OrbitControls and GSAP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+  <style>
+    /* ========================================================================= */
+    /* GLOBAL TYPOGRAPHY & WHITE DASHBOARD STYLING                               */
+    /* ========================================================================= */
+    body {
+      background-color: #060913;
+      color: #0F172A;
+      font-family: 'Outfit', sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-tabular {
+      font-variant-numeric: tabular-nums;
+    }
+    .balance-text {
+      text-wrap: balance;
+    }
+    .pretty-text {
+      text-wrap: pretty;
+    }
+
+    /* Pure White Frosted Glassmorphism for 2D UI */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1), inset 0 1px 0 0 #FFFFFF;
+    }
+    .glass-panel-subtle {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+    }
+
+    /* React Bits Mouse Spotlight Effect */
+    .spotlight-card {
+      position: relative;
+      overflow: hidden;
+    }
+    .spotlight-card::before {
+      content: '';
+      position: absolute;
+      top: var(--mouse-y, -1000px);
+      left: var(--mouse-x, -1000px);
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0) 70%);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      border-radius: 9999px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .spotlight-card:hover::before {
+      opacity: 1;
+    }
+
+    /* CCTV Camera Overlay scanlines & vignette */
+    .cctv-overlay {
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 72%, rgba(5, 10, 20, 0.55) 100%),
+                  repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08) 1px, transparent 1px, transparent 4px);
+    }
+
+    /* Clean Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(241, 245, 249, 0.8);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(203, 213, 225, 0.9);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.9);
+    }
+
+    /* Pulsing animations for angry state */
+    @keyframes pulse-angry {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .angry-pulse-box {
+      animation: pulse-angry 1.2s infinite ease-out;
+    }
+
+    /* 2D YOLO Bounding Box CSS (Rendered over WebGL Canvas) */
+    .yolo-box-container {
+      position: absolute;
+      pointer-events: none;
+      will-change: transform, width, height, opacity;
+      transition: opacity 0.2s ease;
+    }
+    .yolo-box-border {
+      position: absolute;
+      inset: 0;
+      border-width: 2px;
+      border-style: solid;
+      border-radius: 6px;
+    }
+    .yolo-corner {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+    }
+    .yolo-corner-tl { top: -2px; left: -2px; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 4px; }
+    .yolo-corner-tr { top: -2px; right: -2px; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 4px; }
+    .yolo-corner-bl { bottom: -2px; left: -2px; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 4px; }
+    .yolo-corner-br { bottom: -2px; right: -2px; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 4px; }
+
+    /* SVG Keypoint Pose Overlay Layer */
+    #pose-svg-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 25;
+    }
+
+    /* 4-Camera Split Screen Grid Overlay */
+    .cctv-quad-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 15;
+    }
+    .cctv-quad-cell {
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+  </style>
+</head>
+<body class="w-screen h-screen overflow-hidden bg-slate-950 text-slate-800 select-none">
+
+  <!-- ========================================================================= -->
+  <!-- FULLSCREEN 3D VIEWPORT CONTAINER                                          -->
+  <!-- ========================================================================= -->
+  <main id="viewport-container" class="relative w-screen h-screen overflow-hidden bg-slate-950">
+    
+    <!-- 3D WebGL Canvas (100% Fullscreen) -->
+    <canvas id="webgl-canvas" class="w-full h-full block"></canvas>
+
+    <!-- 2D YOLO Computer Vision Bounding Box Layer -->
+    <div id="yolo-hud-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-20"></div>
+
+    <!-- 2D YOLO Pose Keypoint Skeletal Tracking SVG Layer -->
+    <svg id="pose-svg-layer" class="w-full h-full"></svg>
+
+    <!-- 4-Camera CCTV Matrix Grid Borders (Active in Quad Mode) -->
+    <div id="cctv-quad-container" class="cctv-quad-grid hidden">
+      <div class="cctv-quad-cell p-3">
+        <div class="flex items-center space-x-2 bg-black/60 text-white font-mono text-[10px] px-2 py-1 rounded inline-block backdrop-blur-sm border border-white/10">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>CAM-01 [CEILING AI TOP]</span>
+        </div>
+      </div>
+      <div class="cctv-quad-cell p-3">
+        <div class="flex items-center space-x-2 bg-black/60 text-white font-mono text-[10px] px-2 py-1 rounded inline-block backdrop-blur-sm border border-white/10">
+          <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+          <span>CAM-02 [KITCHEN PASS & CHEF]</span>
+        </div>
+      </div>
+      <div class="cctv-quad-cell p-3 flex items-end">
+        <div class="flex items-center space-x-2 bg-black/60 text-white font-mono text-[10px] px-2 py-1 rounded inline-block backdrop-blur-sm border border-white/10">
+          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+          <span>CAM-03 [ENTRANCE HOST STAND]</span>
+        </div>
+      </div>
+      <div class="cctv-quad-cell p-3 flex items-end justify-between">
+        <div class="flex items-center space-x-2 bg-black/60 text-white font-mono text-[10px] px-2 py-1 rounded inline-block backdrop-blur-sm border border-white/10">
+          <span class="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+          <span>CAM-04 [DINING FLOOR DRONE]</span>
+        </div>
+        <div class="text-[10px] font-mono text-slate-300 bg-black/60 px-2 py-1 rounded border border-white/10">QUAD SYNC: 60Hz</div>
+      </div>
+    </div>
+
+    <!-- CCTV Camera Mode Scanlines & Reticle HUD Overlay -->
+    <div id="cctv-hud" class="absolute inset-0 cctv-overlay z-10 flex flex-col justify-between p-6 pointer-events-none transition-opacity duration-300">
+      
+      <!-- Top CCTV Timestamp & Channel Metadata -->
+      <div class="flex items-center justify-between w-full pt-16">
+        <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-2 bg-black/75 text-white border border-red-500/40 px-3 py-1.5 rounded-xl shadow-md backdrop-blur">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 -ml-4"></span>
+            <span class="text-xs font-mono font-bold tracking-wider text-red-400">REC ●</span>
+            <span id="cctv-clock" class="text-xs font-mono text-slate-200 font-tabular">2026-10-24 12:45:00</span>
+          </div>
+          <div class="bg-black/75 px-3 py-1.5 rounded-xl text-xs font-mono text-white flex items-center space-x-2 border border-white/10 shadow-md backdrop-blur">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="cam-channel-text" class="font-bold text-emerald-400">CAM-01 [CEILING_AI_FEED]</span>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-3 text-xs font-mono text-slate-200">
+          <span class="bg-black/75 px-2.5 py-1 rounded-lg border border-white/10 font-tabular shadow">YOLOv8x-Dining</span>
+          <span class="bg-black/75 px-2.5 py-1 rounded-lg border border-white/10 font-tabular shadow" id="fps-display">60.0 FPS</span>
+          <span class="bg-blue-950/80 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg font-tabular font-semibold shadow">1920x1080@60Hz</span>
+        </div>
+      </div>
+
+      <!-- Center Reticle / Optical Calibration Markings -->
+      <div id="cctv-reticle" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+        <svg width="220" height="220" viewBox="0 0 100 100" class="stroke-emerald-400 fill-none" stroke-width="0.8">
+          <circle cx="50" cy="50" r="44" stroke-dasharray="3, 3" />
+          <line x1="50" y1="16" x2="50" y2="36" />
+          <line x1="50" y1="64" x2="50" y2="84" />
+          <line x1="16" y1="50" x2="36" y2="50" />
+          <line x1="64" y1="50" x2="84" y2="50" />
+          <circle cx="50" cy="50" r="2.5" fill="#10B981" />
+        </svg>
+      </div>
+
+      <!-- Bottom CCTV Meta Bar -->
+      <div class="flex items-end justify-between w-full">
+        <div class="text-[11px] font-mono text-slate-200 space-y-0.5 bg-black/75 p-3 rounded-2xl border border-white/10 shadow-lg backdrop-blur-md">
+          <div>EDGE CV ENGINE: <span class="text-emerald-400 font-bold">TensorRT FP16</span> | LATENCY: <span id="inference-time" class="text-blue-400 font-tabular font-bold">3.2ms</span></div>
+          <div>SERVER BACKLOG: <span id="hud-waiter-backlog" class="text-amber-400 font-bold font-tabular">0 Orders Pending</span></div>
+          <div>ROBOT RUNNER: <span class="text-cyan-400 font-semibold" id="hud-robot-status">AGV BellaBot [CHARGING]</span></div>
+        </div>
+
+        <div class="text-right text-[11px] font-mono text-slate-200 bg-black/75 p-3 rounded-2xl border border-white/10 shadow-lg backdrop-blur-md">
+          <div>TODAY REVENUE: <span id="hud-today-rev" class="text-emerald-400 font-bold font-tabular">$1,420.00</span></div>
+          <div>EST. QUEUE WAIT: <span id="cctv-queue-wait" class="text-blue-400 font-bold font-tabular">0m 00s</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- STREAMLINED, HIGH-CLARITY FLOATING TOP NAVBAR (PURE WHITE GLASS)        -->
+    <!-- ======================================================================= -->
+    <header class="absolute top-4 inset-x-6 z-40 flex items-center justify-between pointer-events-auto">
+      
+      <!-- 1. LEFT: Brand & Camera Mode Matrix Switcher -->
+      <div class="flex items-center space-x-2.5">
+        <div class="glass-panel px-3.5 py-2 rounded-2xl flex items-center space-x-2 shadow-md">
+          <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span class="text-xs font-bold tracking-tight text-slate-900">OmniSight <span class="text-emerald-600 font-mono">Twin</span></span>
+        </div>
+
+        <!-- 4-Channel Camera Matrix Buttons -->
+        <div class="glass-panel p-1 rounded-xl flex items-center space-x-1 shadow-md text-xs font-semibold">
+          <button id="btn-cam-cctv1" class="cam-switch-btn px-2.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm flex items-center space-x-1 active:scale-[0.98]">
+            <span>CAM-01</span>
+          </button>
+          <button id="btn-cam-cctv2" class="cam-switch-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition hover:bg-slate-100 flex items-center space-x-1 active:scale-[0.98]">
+            <span>CAM-02</span>
+          </button>
+          <button id="btn-cam-cctv3" class="cam-switch-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition hover:bg-slate-100 flex items-center space-x-1 active:scale-[0.98]">
+            <span>CAM-03</span>
+          </button>
+          <button id="btn-cam-quad" class="cam-switch-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition hover:bg-slate-100 flex items-center space-x-1 active:scale-[0.98]">
+            <span>4-GRID</span>
+          </button>
+          <button id="btn-cam-orbit" class="cam-switch-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition hover:bg-slate-100 flex items-center space-x-1 active:scale-[0.98]">
+            <span>3D ORBIT</span>
+          </button>
+        </div>
+
+        <!-- AI Vision Layers Toggles -->
+        <div class="glass-panel p-1 rounded-xl flex items-center space-x-1 shadow-md text-xs font-semibold">
+          <button id="btn-toggle-pose" class="px-2.5 py-1.5 rounded-lg border border-cyan-400 bg-cyan-50 text-cyan-800 transition active:scale-[0.98]">
+            <span id="pose-toggle-label">🦴 Pose: ON</span>
+          </button>
+          <button id="btn-toggle-heatmap" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition active:scale-[0.98]">
+            <span id="heatmap-toggle-label">🔥 Heatmap: OFF</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. CENTER: Consolidated Executive Pulse Capsule (Clean White Glass) -->
+      <div class="glass-panel px-4 py-2 rounded-2xl flex items-center space-x-3.5 shadow-md text-xs font-mono">
+        <!-- Live Clients -->
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">Guests:</span>
+          <span id="nav-clients-text" class="text-slate-900 font-bold font-tabular">8 Seated</span>
+          <span id="nav-queue-text" class="text-blue-600 font-tabular font-medium">(2 in queue)</span>
+        </div>
+        <span class="text-slate-300">|</span>
+
+        <!-- Revenue Collected -->
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">Revenue:</span>
+          <span id="nav-revenue-text" class="text-emerald-600 font-bold font-tabular">$1,420.00</span>
+        </div>
+        <span class="text-slate-300">|</span>
+
+        <!-- Avg Wait for Order -->
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">Wait Order:</span>
+          <span id="nav-avg-order-text" class="text-amber-600 font-bold font-tabular">00m 18s</span>
+        </div>
+        <span class="text-slate-300">|</span>
+
+        <!-- Avg Wait for Food -->
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">Wait Food:</span>
+          <span id="nav-avg-food-text" class="text-rose-600 font-bold font-tabular">00m 34s</span>
+        </div>
+        <span class="text-slate-300">|</span>
+
+        <!-- CSAT Satisfaction -->
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">CSAT:</span>
+          <span id="nav-csat-text" class="text-emerald-600 font-bold font-tabular">98% 😊</span>
+        </div>
+
+        <!-- Dynamic Angry Alert Highlight -->
+        <div id="nav-angry-badge" class="hidden flex items-center space-x-1 bg-red-100 border border-red-300 text-red-700 px-2 py-0.5 rounded-lg animate-pulse font-bold">
+          <span>😡</span>
+          <span id="nav-angry-count-text">1 Delayed</span>
+        </div>
+      </div>
+
+      <!-- 3. RIGHT: Actions & Primary Dashboard Trigger -->
+      <div class="flex items-center space-x-2">
+        <!-- Quick Spawn Party Button -->
+        <button id="btn-quick-spawn" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/15 transition flex items-center space-x-1.5 active:scale-[0.98]">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          <span>+ Party</span>
+        </button>
+
+        <!-- Rush Hour Toggle -->
+        <button id="btn-quick-rush" class="px-3.5 py-2 rounded-xl text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition active:scale-[0.98]">
+          <span id="rush-text">🔥 Rush: OFF</span>
+        </button>
+
+        <!-- PROMINENT DASHBOARD BUTTON -->
+        <button id="btn-toggle-dashboard" class="px-4 py-2 rounded-xl text-xs font-bold tracking-wide bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 border border-blue-400 transition flex items-center space-x-2 active:scale-[0.98]">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          <span>Executive Dashboard</span>
+          <kbd class="hidden md:inline-block bg-white/20 px-1.5 py-0.5 rounded text-[10px] text-blue-50 font-mono">D</kbd>
+        </button>
+      </div>
+
+    </header>
+
+    <!-- Bottom Left Status & Legend (Clean White Bar) -->
+    <div class="absolute bottom-4 left-4 z-30 glass-panel-subtle px-4 py-2.5 rounded-2xl flex items-center space-x-3.5 text-xs font-mono shadow-md pointer-events-auto border border-slate-200">
+      <div class="flex items-center space-x-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></span>
+        <span class="text-slate-700 font-medium">Clean</span>
+      </div>
+      <div class="flex items-center space-x-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm"></span>
+        <span class="text-slate-700 font-medium">Wait Order</span>
+      </div>
+      <div class="flex items-center space-x-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></span>
+        <span class="text-slate-700 font-medium">Wait Food</span>
+      </div>
+      <div class="flex items-center space-x-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></span>
+        <span class="text-slate-700 font-medium">Dining</span>
+      </div>
+      <div class="flex items-center space-x-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm"></span>
+        <span class="text-slate-700 font-medium">Bill Req</span>
+      </div>
+      <div class="flex items-center space-x-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-600 shadow-sm"></span>
+        <span class="text-slate-700 font-medium">Dirty</span>
+      </div>
+      <div class="h-3 w-px bg-slate-300"></div>
+      <div class="flex items-center space-x-1.5 text-slate-600">
+        <span>Mood:</span>
+        <span>😊 &lt;30s</span>
+        <span>→</span>
+        <span>😐 30-50s</span>
+        <span>→</span>
+        <span>😠 50-70s</span>
+        <span>→</span>
+        <span class="text-red-600 font-bold">😡 &gt;1m (Angry!)</span>
+      </div>
+    </div>
+
+  </main>
+
+
+  <!-- ========================================================================= -->
+  <!-- SIMPLIFIED, PURE WHITE EXECUTIVE OPERATIONS DASHBOARD DRAWER             -->
+  <!-- ========================================================================= -->
+  <div id="top-dashboard-drawer" class="fixed inset-0 z-50 pointer-events-none opacity-0 invisible transition-all duration-300 flex flex-col items-center justify-start pt-6 px-6 pb-8 backdrop-blur-md bg-slate-900/30">
+    
+    <!-- Drawer Container (Pure White High-Clarity Bento) -->
+    <div id="drawer-inner" class="w-full max-w-7xl max-h-[92vh] bg-white/98 rounded-3xl p-6 shadow-2xl flex flex-col pointer-events-auto transform -translate-y-8 transition-transform duration-300 border border-slate-200 overflow-hidden text-slate-800">
+      
+      <!-- Drawer Header Bar -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+        <div class="flex items-center space-x-3.5">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 p-0.5 shadow-md flex items-center justify-center">
+            <div class="w-full h-full bg-white rounded-[14px] flex items-center justify-center">
+              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            </div>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-slate-900 tracking-tight flex items-center space-x-2">
+              <span>Restaurant Operations, Economics & Guest Experience</span>
+              <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-mono font-semibold">Live Shift</span>
+              <span class="text-xs bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded-full font-mono font-semibold">Autonomous Rover Active</span>
+            </h2>
+            <p class="text-xs text-slate-500">Real-time Financials, Client Volume, Two-Stage Wait Timers & Floor IoT State</p>
+          </div>
+        </div>
+
+        <button id="btn-close-drawer" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center space-x-1.5 text-xs font-semibold active:scale-[0.98] border border-slate-200">
+          <span>✕ Close [ESC]</span>
+        </button>
+      </div>
+
+      <!-- Drawer Content Scrollable Area -->
+      <div class="flex-1 overflow-y-auto pt-5 space-y-5 pr-1">
+
+        <!-- ================================================================= -->
+        <!-- TOP 4 PRIMARY CARDS: CLIENTS, REVENUE, ORDER WAIT, FOOD WAIT      -->
+        <!-- ================================================================= -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          <!-- Card 1: 👥 TOTAL CLIENTS IN DAY -->
+          <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-2 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span class="font-semibold flex items-center space-x-1.5">
+                <span class="text-blue-600">👥</span>
+                <span class="text-slate-800">Clients in Day</span>
+              </span>
+              <span class="text-[10px] font-mono text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded-full">Footfall</span>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span id="kpi-clients-day-total" class="text-3xl font-extrabold font-mono text-blue-600 font-tabular">34 Guests</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 pt-1 border-t border-slate-200">
+              <div>Seated: <strong id="kpi-seated-now" class="text-slate-900 font-tabular">8 Pax</strong></div>
+              <div>Queue: <strong id="kpi-queue-now" class="text-blue-700 font-tabular">2 Parties</strong></div>
+            </div>
+            <div class="text-[10px] text-slate-500">Total dining volume tracked via ceiling camera</div>
+          </div>
+
+          <!-- Card 2: 💵 REVENUE COLLECTED TODAY -->
+          <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-2 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span class="font-semibold flex items-center space-x-1.5">
+                <span class="text-emerald-600">💵</span>
+                <span class="text-slate-800">Revenue Collected</span>
+              </span>
+              <span class="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">+18.4% vs yday</span>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span id="kpi-revenue-total" class="text-3xl font-extrabold font-mono text-emerald-600 font-tabular">$1,420.00</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 pt-1 border-t border-slate-200">
+              <div>Avg Check: <strong id="kpi-avg-check" class="text-slate-900 font-tabular">$68.50</strong></div>
+              <div>Per Guest: <strong id="kpi-spend-guest" class="text-emerald-700 font-tabular">$28.40</strong></div>
+            </div>
+            <div class="text-[10px] text-slate-500">Settled automatically when parties complete meals</div>
+          </div>
+
+          <!-- Card 3: 📋 AVERAGE WAIT FOR ORDER -->
+          <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-2 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span class="font-semibold flex items-center space-x-1.5">
+                <span class="text-amber-600">📋</span>
+                <span class="text-slate-800">Avg Wait for Order</span>
+              </span>
+              <span id="kpi-order-sla-badge" class="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">SLA Healthy</span>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span id="kpi-avg-order-wait" class="text-3xl font-extrabold font-mono text-amber-600 font-tabular">00m 18s</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 pt-1 border-t border-slate-200">
+              <div>Target: <strong class="text-slate-900">&lt;30s</strong></div>
+              <div>Peak Wait: <strong id="kpi-peak-order-wait" class="text-amber-700 font-tabular">00m 28s</strong></div>
+            </div>
+            <div class="text-[10px] text-slate-500">Time from seating until server takes order notes</div>
+          </div>
+
+          <!-- Card 4: 🍽️ AVERAGE WAIT FOR FOOD -->
+          <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-2 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span class="font-semibold flex items-center space-x-1.5">
+                <span class="text-rose-600">🍽️</span>
+                <span class="text-slate-800">Avg Wait for Food</span>
+              </span>
+              <span id="kpi-food-sla-badge" class="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">SLA Healthy</span>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span id="kpi-avg-food-wait" class="text-3xl font-extrabold font-mono text-rose-600 font-tabular">00m 34s</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 pt-1 border-t border-slate-200">
+              <div>Target: <strong class="text-slate-900">&lt;60s</strong></div>
+              <div>Peak Wait: <strong id="kpi-peak-food-wait" class="text-rose-700 font-tabular">00m 48s</strong></div>
+            </div>
+            <div class="text-[10px] text-slate-500">Time from order placed until dishes served at table</div>
+          </div>
+
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- SECONDARY ROW: CSAT & AI COPILOT & PREDICTIVE SPARKLINES          -->
+        <!-- ================================================================= -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          
+          <!-- CSAT & Mood Overview (4-col) -->
+          <div class="lg:col-span-4 bg-slate-50/90 p-4 rounded-2xl spotlight-card border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Customer Sentiment</span>
+                <span id="csat-mood-badge" class="text-xs font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">😊 Happy Dining</span>
+              </div>
+              <div class="flex items-baseline space-x-2 pt-2">
+                <span id="kpi-csat-big" class="text-3xl font-extrabold font-mono text-emerald-600 font-tabular">98%</span>
+                <span class="text-xs text-slate-500 font-mono">Satisfaction Score</span>
+              </div>
+              <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden mt-3">
+                <div id="kpi-csat-bar" class="h-full bg-emerald-500 transition-all duration-500" style="width: 98%;"></div>
+              </div>
+            </div>
+            <div class="flex justify-between text-xs font-mono text-slate-600 pt-3 border-t border-slate-200 mt-2">
+              <span>SLA Breaches: <strong id="kpi-sla-breaches" class="text-rose-600 font-bold font-tabular">0</strong></span>
+              <span>Delayed: <strong id="kpi-angry-count" class="text-amber-600 font-bold font-tabular">0</strong></span>
+            </div>
+          </div>
+
+          <!-- AI Staffing & Operations Copilot (4-col) -->
+          <div class="lg:col-span-4 bg-slate-50/90 p-4 rounded-2xl spotlight-card border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center space-x-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
+                <span class="text-base">🤖</span>
+                <span>AI Operations Copilot</span>
+              </div>
+              <div class="mt-2.5 p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-slate-700 leading-relaxed font-sans">
+                <div id="ai-copilot-text" class="font-medium text-blue-900">
+                  ⚡ <strong>Staff Allocation Balanced:</strong> Rover AGV active for runner support. Wait times within healthy SLA targets (&lt;30s order, &lt;60s food).
+                </div>
+              </div>
+            </div>
+            <div class="text-[11px] font-mono text-slate-500 flex justify-between items-center pt-2">
+              <span>Chef Pace: <strong class="text-emerald-700 font-bold font-tabular">94% Efficient</strong></span>
+              <span>Rover Mode: <strong class="text-cyan-700 font-bold">Auto-Runner</strong></span>
+            </div>
+          </div>
+
+          <!-- Real-Time Predictive Wait-Time Sparklines (4-col) -->
+          <div class="lg:col-span-4 bg-slate-50/90 p-4 rounded-2xl spotlight-card border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div class="flex items-center justify-between text-xs text-slate-500 font-semibold">
+              <span class="uppercase tracking-wider">Wait Velocity Forecast</span>
+              <span class="text-[10px] font-mono text-blue-700 font-bold bg-blue-100 px-1.5 py-0.5 rounded">Predictive AI</span>
+            </div>
+            <!-- SVG Sparkline -->
+            <div class="py-1">
+              <svg id="sparkline-svg" class="w-full h-14 overflow-visible" viewBox="0 0 280 50">
+                <!-- Generated dynamically via JS -->
+              </svg>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-200">
+              <span class="flex items-center space-x-1">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span>Order Curve</span>
+              </span>
+              <span class="flex items-center space-x-1">
+                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                <span>Food Curve</span>
+              </span>
+              <span class="text-emerald-600 font-bold">Forecast: Stable</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- FLOOR OPERATIONS: 7-COL IOT TABLE PUCK HUB + 5-COL QUEUE & VELOCITY-->
+        <!-- ================================================================= -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          
+          <!-- Column 1 (7-col): IoT Table Puck Station & Floor Manager -->
+          <div class="lg:col-span-7 bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-3.5 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">IoT Table Puck Station & Controls</h3>
+              </div>
+              <span class="text-[10px] font-mono text-slate-500">6 Tables Connected via ESP32-S3 Mesh</span>
+            </div>
+
+            <!-- Table Selector Pills -->
+            <div class="grid grid-cols-6 gap-2" id="drawer-pills">
+              <button data-tid="1" class="t-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-blue-600 border-blue-500 text-white shadow-sm">T-01</button>
+              <button data-tid="2" class="t-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-white border-slate-200 text-slate-700 hover:border-slate-300">T-02</button>
+              <button data-tid="3" class="t-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-white border-slate-200 text-slate-700 hover:border-slate-300">T-03</button>
+              <button data-tid="4" class="t-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-white border-slate-200 text-slate-700 hover:border-slate-300">T-04</button>
+              <button data-tid="5" class="t-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-white border-slate-200 text-slate-700 hover:border-slate-300">T-05</button>
+              <button data-tid="6" class="t-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-white border-slate-200 text-slate-700 hover:border-slate-300">T-06</button>
+            </div>
+
+            <!-- Table Active Detail Card -->
+            <div class="bg-white border border-slate-200 p-4 rounded-2xl space-y-3 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                  <span id="dt-state-dot" class="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-sm"></span>
+                  <span id="dt-table-id" class="text-sm font-bold font-mono text-slate-900">TBL-01</span>
+                  <span id="dt-state-badge" class="text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase bg-emerald-100 text-emerald-800">FREE_CLEAN</span>
+                </div>
+                <div class="text-right flex items-center space-x-3">
+                  <div class="text-right">
+                    <div id="dt-order-timer" class="text-xs font-mono font-bold text-amber-700 font-tabular">00:00</div>
+                    <div class="text-[10px] text-slate-400 font-mono">Order Wait</div>
+                  </div>
+                  <div class="text-right">
+                    <div id="dt-food-timer" class="text-xs font-mono font-bold text-rose-700 font-tabular">00:00</div>
+                    <div class="text-[10px] text-slate-400 font-mono">Food Wait</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Client Patience Meter for Selected Table -->
+              <div class="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div class="flex justify-between text-xs font-mono text-slate-700">
+                  <span>Guest Patience & Mood:</span>
+                  <span id="dt-patience-text" class="text-emerald-600 font-bold">100% 😊 Happy</span>
+                </div>
+                <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                  <div id="dt-patience-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 100%;"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono pt-0.5">
+                  <span>😊 0-30s: Happy</span>
+                  <span>😐 30-50s: Waiting</span>
+                  <span>😠 50-70s: Annoyed</span>
+                  <span class="text-red-600">&gt;70s: 😡 Enraged</span>
+                </div>
+              </div>
+
+              <!-- Meta Data Bento -->
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono text-slate-600 pt-1">
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                  <span class="text-[10px] text-slate-400 block">Pax Seated</span>
+                  <span id="dt-pax" class="text-slate-900 font-bold font-tabular text-sm">0 Guests</span>
+                </div>
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                  <span class="text-[10px] text-slate-400 block">Table Accrued Bill</span>
+                  <span id="dt-bill-amount" class="text-emerald-600 font-bold font-tabular text-sm">$0.00</span>
+                </div>
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                  <span class="text-[10px] text-slate-400 block">Dishes On Table</span>
+                  <span id="dt-dishes" class="text-slate-900 font-bold text-sm">No</span>
+                </div>
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                  <span class="text-[10px] text-slate-400 block">Puck LED Emissive</span>
+                  <span id="dt-puck-color" class="text-emerald-600 font-bold font-tabular text-sm">#10B981</span>
+                </div>
+              </div>
+
+              <!-- Physical Action Buttons -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <button id="dt-act-take-order" class="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition flex items-center justify-center space-x-1 active:scale-[0.96]">
+                  <span>📋 Take Order</span>
+                </button>
+                <button id="dt-act-serve-food" class="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-rose-50 border border-rose-300 text-rose-800 hover:bg-rose-100 transition flex items-center justify-center space-x-1 active:scale-[0.96]">
+                  <span>🍽️ Serve Food</span>
+                </button>
+                <button id="dt-act-req-bill" class="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-purple-50 border border-purple-300 text-purple-800 hover:bg-purple-100 transition flex items-center justify-center space-x-1 active:scale-[0.96]">
+                  <span>💳 Settle Bill</span>
+                </button>
+                <button id="dt-act-mark-clean" class="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 transition flex items-center justify-center space-x-1 active:scale-[0.96]">
+                  <span>✨ Clean Table</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2 (5-col): Entrance Queue & Kitchen Speed Sliders -->
+          <div class="lg:col-span-5 space-y-4">
+            
+            <!-- Queue List -->
+            <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-3 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">Entrance Stanchion Queue</h3>
+                </div>
+                <span id="dt-queue-badge" class="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold font-tabular">0 In Line</span>
+              </div>
+
+              <div id="drawer-queue-list" class="overflow-y-auto space-y-1.5 max-h-36 pr-1">
+                <!-- Dynamically rendered queue -->
+              </div>
+
+              <button id="dt-btn-spawn-party" class="w-full py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center justify-center space-x-1.5 active:scale-[0.98] shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>Add Customer Party to Line</span>
+              </button>
+            </div>
+
+            <!-- Operational Sliders -->
+            <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-3 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">Operational Velocity Tuning</h3>
+                <span class="text-[10px] font-mono text-slate-500">Service Timings</span>
+              </div>
+
+              <!-- Waiter Speed Slider -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs text-slate-600">
+                  <span>Server & Rover Walk Speed:</span>
+                  <span id="val-waiter-speed" class="font-mono text-blue-600 font-bold font-tabular">3.2x</span>
+                </div>
+                <input id="slider-waiter-speed" type="range" min="1.0" max="6.0" step="0.5" value="3.2" class="w-full accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer">
+              </div>
+
+              <!-- Kitchen Prep Slider -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs text-slate-600">
+                  <span>Chef Cooking Prep Time:</span>
+                  <span id="val-cook-time" class="font-mono text-amber-700 font-bold font-tabular">8 seconds</span>
+                </div>
+                <input id="slider-cook-time" type="range" min="3" max="25" step="1" value="8" class="w-full accent-amber-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer">
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- BOTTOM: LIVE EDGE CCTV INFERENCE & FINANCIAL LOG STREAM           -->
+        <!-- ================================================================= -->
+        <div class="bg-slate-50/90 p-4 rounded-2xl spotlight-card space-y-2 border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">Live Edge CCTV Inference & Robotics Telemetry Bus</h3>
+            </div>
+            <button id="dt-btn-clear-log" class="text-xs font-mono text-slate-500 hover:text-slate-900 transition">Clear Logs</button>
+          </div>
+
+          <div id="mqtt-terminal-drawer" class="w-full h-24 bg-white rounded-xl p-2.5 font-mono text-[10px] text-slate-700 overflow-y-auto space-y-1 border border-slate-200 select-text">
+            <!-- Formatted JSON stream -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT: ADVANCED TWO-STAGE SERVICE SIMULATION & ROBOTICS TWIN         -->
+  <!-- ========================================================================= -->
+  <script>
+    /**
+     * OmniSight RestoTwin v5.0 - Multi-Camera CCTV Grid, Autonomous Delivery Rover,
+     * Kitchen Chef NPC, YOLOv8 Pose Skeletons, Heatmap Layer & Synthesized Audio FX.
+     */
+
+    // 6-Stage Table States Machine
+    const TABLE_STATES = {
+      FREE_CLEAN: {
+        id: 'FREE_CLEAN',
+        label: 'FREE & CLEAN',
+        color: '#10B981',
+        hexNum: 0x10B981,
+      },
+      WAITING_FOR_ORDER: {
+        id: 'WAITING_FOR_ORDER',
+        label: 'WAITING FOR ORDER',
+        color: '#F59E0B',
+        hexNum: 0xF59E0B,
+      },
+      WAITING_FOR_FOOD: {
+        id: 'WAITING_FOR_FOOD',
+        label: 'WAITING FOR FOOD',
+        color: '#EF4444',
+        hexNum: 0xEF4444,
+      },
+      EATING_SERVED: {
+        id: 'EATING_SERVED',
+        label: 'SERVED / DINING',
+        color: '#3B82F6',
+        hexNum: 0x3B82F6,
+      },
+      BILL_REQUESTED: {
+        id: 'BILL_REQUESTED',
+        label: 'BILL REQUESTED',
+        color: '#8B5CF6',
+        hexNum: 0x8B5CF6,
+      },
+      DIRTY_UNCLEARED: {
+        id: 'DIRTY_UNCLEARED',
+        label: 'DIRTY (DISHES DETECTED)',
+        color: '#D97706',
+        hexNum: 0xD97706,
+      }
+    };
+
+    // Client Moods based on waiting duration
+    const ANGER_LEVELS = [
+      { name: 'Happy', emoji: '😊', color: '#10B981', minPatience: 75 },
+      { name: 'Waiting', emoji: '😐', color: '#EAB308', minPatience: 45 },
+      { name: 'Annoyed', emoji: '😠', color: '#F97316', minPatience: 20 },
+      { name: 'Angry', emoji: '😡', color: '#EF4444', minPatience: 0 }
+    ];
+
+    // Global Config
+    const CONFIG = {
+      timeScale: 1.0,
+      isPaused: false,
+      rushHour: false,
+      showCvHud: true,
+      showPoseSkeletons: true,
+      showHeatmap: false,
+      audioEnabled: false,
+      currentCameraMode: 'CAM-01', // CAM-01, CAM-02, CAM-03, QUAD, ORBIT
+      selectedTableId: 1,
+      isDrawerOpen: false,
+      timings: {
+        takingOrderDuration: 2.2,
+        kitchenCookDuration: 8,
+        eatingDuration: 22,
+        billDuration: 6,
+        cleaningDuration: 4,
+        maxOrderWaitPatience: 55,
+        maxFoodWaitPatience: 70,
+        rushHourInterval: 5
+      },
+      waiterSpeed: 3.2
+    };
+
+    // Global Operational & Financial Statistics
+    const STATS = {
+      totalRevenue: 1420.00,
+      totalPartiesCompleted: 18,
+      totalGuestsToday: 26,
+      totalOrderWaitTimes: [14, 18, 22, 16, 20],
+      totalFoodWaitTimes: [28, 35, 30, 42, 36],
+      peakOrderWaitObserved: 28,
+      peakFoodWaitObserved: 48,
+      slaBreaches: 0,
+      currentCsat: 98,
+      robotDeliveries: 4
+    };
+
+    // Multi-Camera Definitions
+    let scene, renderer;
+    let cctvCamera1, cctvCamera2, cctvCamera3, orbitCamera, activeCamera, controls;
+    let cctvRigGroup, cameraFrustumCone;
+    let viewportWidth, viewportHeight;
+    const clock = new THREE.Clock();
+
+    // Simulation Entities
+    const tables = [];
+    const customers = [];
+    const queueLine = [];
+    let waiterAgent = null;
+    let busboyAgent = null;
+    let chefAgent = null;
+    let roboRunner = null;
+
+    // Floor Heatmap Canvas & Mesh
+    let heatmapCanvas, heatmapCtx, heatmapTexture, heatmapMesh;
+
+    // Fixed Restaurant Waypoints
+    const WAYPOINTS = {
+      SPAWN: new THREE.Vector3(-10.5, 0, 7.5),
+      QUEUE_START: new THREE.Vector3(-9.5, 0, 4.0),
+      EXIT_DOOR: new THREE.Vector3(-10.5, 0, 7.5),
+      KITCHEN_PASS: new THREE.Vector3(5.5, 0, -5.4),
+      KITCHEN_STANDBY: new THREE.Vector3(6.8, 0, -4.8),
+      CHEF_STATION: new THREE.Vector3(5.5, 0, -7.5),
+      ROBOT_CHARGER: new THREE.Vector3(3.2, 0, -5.2),
+      BUSBOY_STANDBY: new THREE.Vector3(-10.0, 0, -6.5)
+    };
+
+    // =========================================================================
+    // 0. PROCEDURAL WEB AUDIO SYNTHESIZER (ZERO ASSET / PURE WEBAUDIO)
+    // =========================================================================
+    let audioCtx = null;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playBellSound() {
+      if (!CONFIG.audioEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1480, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1100, ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.8);
+      } catch (e) {}
+    }
+
+    function playPuckClick() {
+      if (!CONFIG.audioEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.setValueAtTime(1400, ctx.currentTime + 0.04);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } catch (e) {}
+    }
+
+    function playCashChime() {
+      if (!CONFIG.audioEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.08);
+          gain.gain.setValueAtTime(0.12, ctx.currentTime + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.08 + 0.4);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + i * 0.08);
+          osc.stop(ctx.currentTime + i * 0.08 + 0.45);
+        });
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // 1. PROCEDURAL TEXTURES (SMOKED EUROPEAN WALNUT PARQUET & AMERICAN WALNUT)
+    // =========================================================================
+    function createTileTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Luxury Smoked European Walnut Hardwood Parquet
+      ctx.fillStyle = '#261A14';
+      ctx.fillRect(0, 0, 512, 512);
+
+      const plankW = 64;
+      const plankH = 16;
+      const tones = ['#2E1E17', '#36241B', '#291B14', '#3D2A1F', '#312119'];
+
+      for (let y = 0; y < 512; y += plankH) {
+        const offset = (y / plankH) % 2 === 0 ? 0 : plankW / 2;
+        for (let x = -plankW; x < 512 + plankW; x += plankW) {
+          const col = tones[Math.floor(Math.abs(Math.sin(x * 12 + y * 7)) * tones.length) % tones.length];
+          ctx.fillStyle = col;
+          ctx.fillRect(x + offset + 1, y + 1, plankW - 2, plankH - 2);
+
+          // Subtle wood grain lines
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x + offset + 2, y + 5);
+          ctx.lineTo(x + offset + plankW - 3, y + 5);
+          ctx.moveTo(x + offset + 2, y + 11);
+          ctx.lineTo(x + offset + plankW - 3, y + 11);
+          ctx.stroke();
+        }
+      }
+
+      ctx.strokeStyle = '#120C09';
+      ctx.lineWidth = 1.5;
+      for (let y = 0; y <= 512; y += plankH) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(512, y);
+        ctx.stroke();
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(6, 4);
+      return texture;
+    }
+
+    function createWoodTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#3E271D';
+      ctx.fillRect(0, 0, 256, 256);
+
+      ctx.strokeStyle = '#281710';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 256; i += 5) {
+        ctx.beginPath();
+        ctx.moveTo(0, i + Math.sin(i * 0.12) * 4);
+        ctx.lineTo(256, i + Math.cos(i * 0.12) * 4);
+        ctx.stroke();
+      }
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // =========================================================================
+    // 2. THREE.JS INITIALIZATION (MULTI-CAMERA SYSTEM & DAYLIGHT + WARM LAMPS)
+    // =========================================================================
+    function initThree() {
+      const container = document.getElementById('viewport-container');
+      const canvas = document.getElementById('webgl-canvas');
+      viewportWidth = container.clientWidth;
+      viewportHeight = container.clientHeight;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0A0F1D);
+      scene.fog = new THREE.FogExp2(0x0A0F1D, 0.012);
+
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setSize(viewportWidth, viewportHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      // 1. CAM-01: Mounted High on Ceiling (Default Overview)
+      cctvCamera1 = new THREE.PerspectiveCamera(50, viewportWidth / viewportHeight, 0.5, 60);
+      cctvCamera1.position.set(0, 15.6, 10.5);
+      cctvCamera1.lookAt(0, 0.5, -0.5);
+
+      // 2. CAM-02: Kitchen Pass & Chef Dispatch Cam
+      cctvCamera2 = new THREE.PerspectiveCamera(46, viewportWidth / viewportHeight, 0.5, 50);
+      cctvCamera2.position.set(9.0, 3.4, -3.2);
+      cctvCamera2.lookAt(5.2, 1.2, -6.8);
+
+      // 3. CAM-03: Entrance Host Stand & Queue Cam
+      cctvCamera3 = new THREE.PerspectiveCamera(52, viewportWidth / viewportHeight, 0.5, 50);
+      cctvCamera3.position.set(-11.5, 4.8, 8.5);
+      cctvCamera3.lookAt(-9.0, 0.8, 3.0);
+
+      // 4. CAM-04 / Orbit Camera (Drone Patrol View)
+      orbitCamera = new THREE.PerspectiveCamera(48, viewportWidth / viewportHeight, 0.5, 100);
+      orbitCamera.position.set(15, 16, 18);
+      orbitCamera.lookAt(0, 1, 0);
+
+      activeCamera = cctvCamera1;
+
+      controls = new THREE.OrbitControls(orbitCamera, canvas);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxPolarAngle = Math.PI / 2 - 0.05;
+      controls.minDistance = 4;
+      controls.maxDistance = 50;
+      controls.enabled = false;
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xE2E8F0, 0.60);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xFFE8CC, 1.25);
+      dirLight.position.set(10, 22, 12);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 1;
+      dirLight.shadow.camera.far = 45;
+      dirLight.shadow.camera.left = -16;
+      dirLight.shadow.camera.right = 16;
+      dirLight.shadow.camera.top = 16;
+      dirLight.shadow.camera.bottom = -16;
+      dirLight.shadow.bias = -0.0005;
+      scene.add(dirLight);
+
+      // Warm Accent Dining Pools of Light
+      const diningLight1 = new THREE.PointLight(0xF59E0B, 1.3, 16);
+      diningLight1.position.set(-3.5, 4.5, 0.0);
+      scene.add(diningLight1);
+
+      const diningLight2 = new THREE.PointLight(0xF59E0B, 1.3, 16);
+      diningLight2.position.set(3.5, 4.5, 0.0);
+      scene.add(diningLight2);
+
+      const kitchenLight = new THREE.PointLight(0xF59E0B, 1.8, 16);
+      kitchenLight.position.set(5.5, 3.8, -6.0);
+      scene.add(kitchenLight);
+
+      const entranceLight = new THREE.PointLight(0x60A5FA, 0.8, 14);
+      entranceLight.position.set(-9.5, 3.8, 4.5);
+      scene.add(entranceLight);
+
+      buildEnvironment();
+      buildFootfallHeatmap();
+      buildCctvCameraRig();
+      buildTables();
+      buildStaffAndRobotics();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    // =========================================================================
+    // 3. 3D RESTAURANT ENVIRONMENT & LUXURY ARCHITECTURAL INTERIOR
+    // =========================================================================
+    function buildEnvironment() {
+      const tileTexture = createTileTexture();
+
+      const floorGeo = new THREE.PlaneGeometry(24, 16);
+      const floorMat = new THREE.MeshStandardMaterial({
+        map: tileTexture,
+        roughness: 0.35,
+        metalness: 0.15
+      });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      // Walls
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0x0E1422, roughness: 0.85 });
+      const woodTrimMat = new THREE.MeshStandardMaterial({ color: 0xD4A373, roughness: 0.45 });
+
+      // Back Wall with Acoustic Wood Slats
+      const backWall = new THREE.Mesh(new THREE.BoxGeometry(24.4, 3.6, 0.4), wallMat);
+      backWall.position.set(0, 1.8, -8.2);
+      backWall.receiveShadow = true;
+      scene.add(backWall);
+
+      const backTrim = new THREE.Mesh(new THREE.BoxGeometry(24.4, 0.9, 0.45), woodTrimMat);
+      backTrim.position.set(0, 0.45, -8.18);
+      scene.add(backTrim);
+
+      const slatMat = new THREE.MeshStandardMaterial({ color: 0xC89865, roughness: 0.5 });
+      for (let sx = -11.5; sx <= 11.5; sx += 0.42) {
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.06), slatMat);
+        slat.position.set(sx, 2.2, -8.0);
+        slat.castShadow = true;
+        scene.add(slat);
+      }
+
+      // Warm Brass Sconces on Back Wall
+      const brassSconceMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, metalness: 0.9, roughness: 0.2 });
+      [-8, -2, 2, 8].forEach(wx => {
+        const sconce = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.24, 12), brassSconceMat);
+        sconce.position.set(wx, 2.4, -7.9);
+        scene.add(sconce);
+
+        const sconceLight = new THREE.PointLight(0xF59E0B, 0.6, 6);
+        sconceLight.position.set(wx, 2.4, -7.7);
+        scene.add(sconceLight);
+      });
+
+      // Left & Right Walls
+      const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.6, 16.4), wallMat);
+      leftWall.position.set(-12.2, 1.8, 0);
+      scene.add(leftWall);
+
+      const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.6, 16.4), wallMat);
+      rightWall.position.set(12.2, 1.8, 0);
+      scene.add(rightWall);
+
+      // Kitchen Pass-Through Counter (Fluted Dark Base + Polished White Marble Top)
+      const kitchenGroup = new THREE.Group();
+      kitchenGroup.position.set(5.5, 0, -6.8);
+
+      const counterBase = new THREE.Mesh(
+        new THREE.BoxGeometry(7.0, 1.1, 1.4),
+        new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.6 })
+      );
+      counterBase.position.y = 0.55;
+      counterBase.castShadow = true;
+      kitchenGroup.add(counterBase);
+
+      const counterTop = new THREE.Mesh(
+        new THREE.BoxGeometry(7.2, 0.12, 1.6),
+        new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.15, metalness: 0.35 })
+      );
+      counterTop.position.y = 1.16;
+      counterTop.castShadow = true;
+      kitchenGroup.add(counterTop);
+
+      // Order Service Bell on the kitchen counter!
+      const bellBase = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 0.03, 16), brassSconceMat);
+      bellBase.position.set(-2.8, 1.23, 0);
+      kitchenGroup.add(bellBase);
+
+      const bellDome = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12, 0, Math.PI*2, 0, Math.PI*0.5), brassSconceMat);
+      bellDome.position.set(-2.8, 1.25, 0);
+      kitchenGroup.add(bellDome);
+
+      const heatLampBar = new THREE.Mesh(
+        new THREE.BoxGeometry(6.0, 0.08, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0xD4AF37, metalness: 0.9 })
+      );
+      heatLampBar.position.set(0, 2.3, 0);
+      kitchenGroup.add(heatLampBar);
+
+      for (let i = -2; i <= 2; i += 2) {
+        const lamp = new THREE.Mesh(
+          new THREE.ConeGeometry(0.24, 0.35, 12),
+          new THREE.MeshStandardMaterial({ color: 0xD4AF37, emissive: 0xF59E0B, emissiveIntensity: 0.9 })
+        );
+        lamp.position.set(i, 2.1, 0);
+        lamp.rotation.x = Math.PI;
+        kitchenGroup.add(lamp);
+      }
+
+      scene.add(kitchenGroup);
+
+      // Entrance Stanchions
+      const stanchionGroup = new THREE.Group();
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, metalness: 0.9, roughness: 0.2 });
+      const velvetMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.7 });
+
+      const stanchionPositions = [
+        new THREE.Vector3(-10.5, 0, 5.5),
+        new THREE.Vector3(-10.5, 0, 3.5),
+        new THREE.Vector3(-10.5, 0, 1.5),
+        new THREE.Vector3(-8.5, 0, 1.5),
+      ];
+
+      for (let i = 0; i < stanchionPositions.length; i++) {
+        const p = stanchionPositions[i];
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.05, 16), goldMat);
+        base.position.set(p.x, 0.025, p.z);
+        stanchionGroup.add(base);
+
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 12), goldMat);
+        pole.position.set(p.x, 0.525, p.z);
+        pole.castShadow = true;
+        stanchionGroup.add(pole);
+
+        const finial = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), goldMat);
+        finial.position.set(p.x, 1.06, p.z);
+        stanchionGroup.add(finial);
+
+        if (i < stanchionPositions.length - 1) {
+          const pNext = stanchionPositions[i + 1];
+          const dist = p.distanceTo(pNext);
+          const ropeGeo = new THREE.CylinderGeometry(0.025, 0.025, dist, 8);
+          const rope = new THREE.Mesh(ropeGeo, velvetMat);
+          const mid = p.clone().add(pNext).multiplyScalar(0.5);
+          rope.position.set(mid.x, 0.85, mid.z);
+          rope.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pNext.clone().sub(p).normalize());
+          stanchionGroup.add(rope);
+        }
+      }
+      scene.add(stanchionGroup);
+
+      // Decorative Botanical fig plant
+      const plantGroup = new THREE.Group();
+      plantGroup.position.set(-11.0, 0, -6.8);
+
+      const pot = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.4, 0.3, 0.7, 16),
+        new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.3 })
+      );
+      pot.position.y = 0.35;
+      pot.castShadow = true;
+      plantGroup.add(pot);
+
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x16A34A, roughness: 0.6 });
+      for (let i = 0; i < 7; i++) {
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.65, 8), leafMat);
+        const angle = (i / 7) * Math.PI * 2;
+        leaf.position.set(Math.cos(angle) * 0.15, 0.9 + (i % 3) * 0.1, Math.sin(angle) * 0.15);
+        leaf.rotation.z = Math.cos(angle) * 0.35;
+        leaf.rotation.x = Math.sin(angle) * 0.35;
+        plantGroup.add(leaf);
+      }
+      scene.add(plantGroup);
+    }
+
+    // =========================================================================
+    // 3B. SPATIAL FOOTFALL DENSITY HEATMAP LAYER
+    // =========================================================================
+    function buildFootfallHeatmap() {
+      heatmapCanvas = document.createElement('canvas');
+      heatmapCanvas.width = 256;
+      heatmapCanvas.height = 170;
+      heatmapCtx = heatmapCanvas.getContext('2d');
+
+      heatmapCtx.fillStyle = 'rgba(0, 0, 0, 0)';
+      heatmapCtx.fillRect(0, 0, 256, 170);
+
+      heatmapTexture = new THREE.CanvasTexture(heatmapCanvas);
+      const mat = new THREE.MeshBasicMaterial({
+        map: heatmapTexture,
+        transparent: true,
+        opacity: 0.65,
+        blending: THREE.AdditiveBlending
+      });
+
+      heatmapMesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 16), mat);
+      heatmapMesh.rotation.x = -Math.PI / 2;
+      heatmapMesh.position.y = 0.02;
+      heatmapMesh.visible = false;
+      scene.add(heatmapMesh);
+    }
+
+    function recordFootfall(worldX, worldZ, intensity = 0.08) {
+      if (!heatmapCtx) return;
+      // Convert world bounds (-12..12, -8..8) to canvas (0..256, 0..170)
+      const cx = ((worldX + 12) / 24) * 256;
+      const cy = ((worldZ + 8) / 16) * 170;
+
+      const rad = 14;
+      const grad = heatmapCtx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      grad.addColorStop(0, `rgba(239, 68, 68, ${intensity})`);
+      grad.addColorStop(0.4, `rgba(245, 158, 11, ${intensity * 0.7})`);
+      grad.addColorStop(0.8, `rgba(59, 130, 246, ${intensity * 0.3})`);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      heatmapCtx.fillStyle = grad;
+      heatmapCtx.beginPath();
+      heatmapCtx.arc(cx, cy, rad, 0, Math.PI * 2);
+      heatmapCtx.fill();
+      heatmapTexture.needsUpdate = true;
+    }
+
+    // =========================================================================
+    // 4. CCTV RIG & FRUSTUM
+    // =========================================================================
+    function buildCctvCameraRig() {
+      cctvRigGroup = new THREE.Group();
+      cctvRigGroup.position.set(0, 16.5, 11.5);
+
+      const mountPlate = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.5, 0.1, 16),
+        new THREE.MeshStandardMaterial({ color: 0x64748B, metalness: 0.8 })
+      );
+      cctvRigGroup.add(mountPlate);
+
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, 0.6, 12),
+        new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8 })
+      );
+      stem.position.y = -0.3;
+      cctvRigGroup.add(stem);
+
+      const housing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.7, 0.5, 0.9),
+        new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.3 })
+      );
+      housing.position.set(0, -0.6, 0);
+      housing.lookAt(0, -16.5, -12);
+      cctvRigGroup.add(housing);
+
+      const lens = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.22, 0.3, 16),
+        new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.1, metalness: 0.9 })
+      );
+      lens.rotation.x = Math.PI / 2;
+      lens.position.set(0, -0.6, -0.5);
+      cctvRigGroup.add(lens);
+
+      scene.add(cctvRigGroup);
+
+      const coneGeo = new THREE.ConeGeometry(13.5, 17, 4, 1, true);
+      const coneMat = new THREE.MeshBasicMaterial({
+        color: 0x10B981,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.18
+      });
+      cameraFrustumCone = new THREE.Mesh(coneGeo, coneMat);
+      cameraFrustumCone.position.set(0, 8.2, 5.0);
+      cameraFrustumCone.rotation.x = 0.52;
+      scene.add(cameraFrustumCone);
+
+      cctvRigGroup.visible = false;
+      cameraFrustumCone.visible = false;
+    }
+
+    // =========================================================================
+    // 5. 6 DINING TABLES WITH IOT PUCKS & DISHES
+    // =========================================================================
+    function buildTables() {
+      const woodTexture = createWoodTexture();
+
+      const tableConfigs = [
+        { id: 1, x: -6.0, z: -2.8 },
+        { id: 2, x: 0.0,  z: -2.8 },
+        { id: 3, x: 6.0,  z: -2.8 },
+        { id: 4, x: -6.0, z: 3.2 },
+        { id: 5, x: 0.0,  z: 3.2 },
+        { id: 6, x: 6.0,  z: 3.2 },
+      ];
+
+      tableConfigs.forEach(cfg => {
+        const tableGroup = new THREE.Group();
+        tableGroup.position.set(cfg.x, 0, cfg.z);
+
+        // Table Top (2.4 x 1.6 x 0.08)
+        const topGeo = new THREE.BoxGeometry(2.4, 0.08, 1.6);
+        const topMat = new THREE.MeshStandardMaterial({
+          map: woodTexture,
+          roughness: 0.35,
+          metalness: 0.12
+        });
+        const tableTop = new THREE.Mesh(topGeo, topMat);
+        tableTop.position.y = 0.96;
+        tableTop.castShadow = true;
+        tableTop.receiveShadow = true;
+        tableGroup.add(tableTop);
+
+        // Polished Gold Brass Edge Band
+        const brassRimMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, metalness: 0.9, roughness: 0.2 });
+        const rim = new THREE.Mesh(new THREE.BoxGeometry(2.43, 0.035, 1.63), brassRimMat);
+        rim.position.y = 0.94;
+        tableGroup.add(rim);
+
+        const legMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, metalness: 0.8, roughness: 0.3 });
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.92, 12), legMat);
+        post.position.y = 0.46;
+        post.castShadow = true;
+        tableGroup.add(post);
+
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.04, 1.0), legMat);
+        foot.position.y = 0.02;
+        foot.receiveShadow = true;
+        tableGroup.add(foot);
+
+        const vase = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.15, 12), new THREE.MeshStandardMaterial({ color: 0xF8FAFC }));
+        vase.position.set(-0.35, 1.08, 0);
+        tableGroup.add(vase);
+
+        // Modern Luxury Emerald Velvet Upholstered Bucket Chairs (4 Chairs)
+        const chairConfigs = [
+          { x: 0, z: -1.25, rotY: 0 },
+          { x: 0, z: 1.25, rotY: Math.PI },
+          { x: -1.45, z: 0, rotY: Math.PI/2 },
+          { x: 1.45, z: 0, rotY: -Math.PI/2 }
+        ];
+
+        const chairShellMat = new THREE.MeshStandardMaterial({ color: 0x064E3B, roughness: 0.65 }); // Deep Emerald Velvet
+        const chairCushionMat = new THREE.MeshStandardMaterial({ color: 0x047857, roughness: 0.7 }); // Emerald Velvet Cushion
+        const chairLegMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, metalness: 0.8, roughness: 0.2 });
+        const brassTipMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, metalness: 0.9, roughness: 0.2 });
+        const chairSlots = [];
+
+        chairConfigs.forEach((cPos, idx) => {
+          const chair = new THREE.Group();
+          chair.position.set(cPos.x, 0, cPos.z);
+          chair.rotation.y = cPos.rotY;
+
+          const seatBase = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.06, 16), chairShellMat);
+          seatBase.position.y = 0.50;
+          seatBase.castShadow = true;
+          chair.add(seatBase);
+
+          const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 16), chairCushionMat);
+          cushion.position.y = 0.54;
+          chair.add(cushion);
+
+          const backGeo = new THREE.CylinderGeometry(0.32, 0.30, 0.46, 16, 1, true, -Math.PI * 0.45, Math.PI * 0.9);
+          const back = new THREE.Mesh(backGeo, chairShellMat);
+          back.position.set(0, 0.74, 0.05);
+          back.castShadow = true;
+          chair.add(back);
+
+          const legAngles = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+          legAngles.forEach(ang => {
+            const lx = Math.cos(ang) * 0.22;
+            const lz = Math.sin(ang) * 0.22;
+
+            const legGroup = new THREE.Group();
+            legGroup.position.set(lx, 0.48, lz);
+            legGroup.rotation.z = Math.cos(ang) * 0.12;
+            legGroup.rotation.x = Math.sin(ang) * 0.12;
+
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.012, 0.48, 8), chairLegMat);
+            leg.position.y = -0.24;
+            leg.castShadow = true;
+            legGroup.add(leg);
+
+            const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.012, 0.08, 8), brassTipMat);
+            tip.position.y = -0.44;
+            legGroup.add(tip);
+
+            chair.add(legGroup);
+          });
+
+          tableGroup.add(chair);
+
+          chairSlots.push({
+            index: idx,
+            localPos: new THREE.Vector3(cPos.x, 0.54, cPos.z),
+            rotY: cPos.rotY,
+            isOccupied: false
+          });
+        });
+
+        // 3D Physical IoT Table Puck
+        const puckGroup = new THREE.Group();
+        puckGroup.position.set(0, 1.01, 0);
+
+        const puckBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18, 0.20, 0.04, 24),
+          new THREE.MeshStandardMaterial({ color: 0x0F172A, metalness: 0.8, roughness: 0.2 })
+        );
+        puckGroup.add(puckBase);
+
+        const ledRingMat = new THREE.MeshStandardMaterial({
+          color: TABLE_STATES.FREE_CLEAN.hexNum,
+          emissive: TABLE_STATES.FREE_CLEAN.hexNum,
+          emissiveIntensity: 1.8,
+          roughness: 0.2
+        });
+        const ledRing = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 12, 24), ledRingMat);
+        ledRing.rotation.x = Math.PI / 2;
+        ledRing.position.y = 0.025;
+        puckGroup.add(ledRing);
+
+        const puckBtn = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.08, 0.08, 0.02, 16),
+          new THREE.MeshStandardMaterial({ color: 0xCBD5E1, metalness: 0.6 })
+        );
+        puckBtn.position.y = 0.035;
+        puckGroup.add(puckBtn);
+
+        tableGroup.add(puckGroup);
+
+        // 3D Plates & Glasses
+        const dishesGroup = new THREE.Group();
+        dishesGroup.position.set(0, 1.0, 0);
+
+        const platePositions = [
+          new THREE.Vector3(0, 0.01, -0.45),
+          new THREE.Vector3(0, 0.01, 0.45),
+          new THREE.Vector3(-0.65, 0.01, 0),
+          new THREE.Vector3(0.65, 0.01, 0)
+        ];
+
+        platePositions.forEach(p => {
+          const plate = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.18, 0.14, 0.025, 16),
+            new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2 })
+          );
+          plate.position.copy(p);
+          dishesGroup.add(plate);
+
+          const food = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.8 })
+          );
+          food.position.set(p.x, p.y + 0.02, p.z);
+          dishesGroup.add(food);
+
+          const glass = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.04, 0.03, 0.12, 12),
+            new THREE.MeshStandardMaterial({ color: 0x93C5FD, transparent: true, opacity: 0.7 })
+          );
+          glass.position.set(p.x + 0.18, p.y + 0.06, p.z + 0.12);
+          dishesGroup.add(glass);
+        });
+
+        dishesGroup.visible = false;
+        tableGroup.add(dishesGroup);
+
+        scene.add(tableGroup);
+
+        // Table Entity Structure with Dual Timers
+        tables.push({
+          id: cfg.id,
+          code: `TBL-0${cfg.id}`,
+          position: new THREE.Vector3(cfg.x, 0, cfg.z),
+          group: tableGroup,
+          dishesGroup: dishesGroup,
+          ledRingMat: ledRingMat,
+          chairSlots: chairSlots,
+          state: TABLE_STATES.FREE_CLEAN.id,
+          stateDef: TABLE_STATES.FREE_CLEAN,
+          timer: 0,
+          orderWaitTimer: 0,
+          foodWaitTimer: 0,
+          kitchenCookTimer: 0,
+          eatingRemaining: CONFIG.timings.eatingDuration,
+          seatedParty: null,
+          currentBill: 0,
+          confidence: (0.94 + Math.random() * 0.05).toFixed(2),
+          patience: 100,
+          angerLevel: 0,
+          isWaiterAssigned: false,
+          isFoodCooked: false,
+          hasLoggedSla: false,
+          hudElement: null,
+          corners: [
+            new THREE.Vector3(cfg.x - 1.25, 0.0, cfg.z - 0.85),
+            new THREE.Vector3(cfg.x + 1.25, 0.0, cfg.z - 0.85),
+            new THREE.Vector3(cfg.x + 1.25, 0.0, cfg.z + 0.85),
+            new THREE.Vector3(cfg.x - 1.25, 0.0, cfg.z + 0.85),
+            new THREE.Vector3(cfg.x - 1.25, 1.2, cfg.z - 0.85),
+            new THREE.Vector3(cfg.x + 1.25, 1.2, cfg.z - 0.85),
+            new THREE.Vector3(cfg.x + 1.25, 1.2, cfg.z + 0.85),
+            new THREE.Vector3(cfg.x - 1.25, 1.2, cfg.z + 0.85)
+          ]
+        });
+      });
+    }
+
+    // =========================================================================
+    // 6. MULTI-AGENT NPC ARCHITECTURE & AUTONOMOUS AGV ROBOT RUNNER
+    // =========================================================================
+    function createArticulatedNpc(type, colorHex) {
+      const npc = new THREE.Group();
+
+      const pelvis = new THREE.Group();
+      pelvis.position.y = 0.88;
+      npc.add(pelvis);
+
+      const skinTones = [0xF8D9BA, 0xE7BC91, 0xD4A373, 0xBB8554];
+      const skinMat = new THREE.MeshStandardMaterial({
+        color: skinTones[Math.floor(Math.random() * skinTones.length)],
+        roughness: 0.45
+      });
+
+      let shirtColor = colorHex || 0x2563EB;
+      let vestColor = null;
+      let pantsColor = 0x1E293B;
+      let shoeColor = 0x0F172A;
+
+      if (type === 'WAITER') {
+        shirtColor = 0xFFFFFF;
+        vestColor = 0x0F172A;
+        pantsColor = 0x0F172A;
+        shoeColor = 0x090D16;
+      } else if (type === 'BUSBOY') {
+        shirtColor = 0x334155;
+        vestColor = 0xD97706;
+        pantsColor = 0x1E293B;
+        shoeColor = 0x1E293B;
+      } else if (type === 'CHEF') {
+        shirtColor = 0xFFFFFF;
+        vestColor = 0xFFFFFF;
+        pantsColor = 0x111827;
+        shoeColor = 0x111827;
+      }
+
+      const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.65 });
+      const shoeMat = new THREE.MeshStandardMaterial({ color: shoeColor, roughness: 0.25, metalness: 0.2 });
+      const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 });
+
+      const pelvisMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.13, 16), pantsMat);
+      pelvisMesh.position.y = 0.02;
+      pelvisMesh.castShadow = true;
+      pelvis.add(pelvisMesh);
+
+      const spine = new THREE.Group();
+      spine.position.y = 0.08;
+      pelvis.add(spine);
+
+      const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.14, 0.12, 16), pantsMat);
+      waist.position.y = 0.06;
+      spine.add(waist);
+
+      const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.135, 0.28, 16), shirtMat);
+      chest.position.y = 0.26;
+      chest.castShadow = true;
+      spine.add(chest);
+
+      if (type === 'WAITER') {
+        const vestMat = new THREE.MeshStandardMaterial({ color: vestColor, roughness: 0.5 });
+        const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.14, 0.24, 16), vestMat);
+        vest.position.y = 0.25;
+        spine.add(vest);
+
+        const bowtie = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.035, 0.03), new THREE.MeshStandardMaterial({ color: 0x991B1B, roughness: 0.3 }));
+        bowtie.position.set(0, 0.40, 0.17);
+        spine.add(bowtie);
+      } else if (type === 'BUSBOY') {
+        const apronMat = new THREE.MeshStandardMaterial({ color: vestColor, roughness: 0.6 });
+        const apronBib = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.02), apronMat);
+        apronBib.position.set(0, 0.26, 0.14);
+        spine.add(apronBib);
+      } else if (type === 'CHEF') {
+        // Double-breasted black buttons
+        const buttonMat = new THREE.MeshStandardMaterial({ color: 0x111827 });
+        for (let by = 0.18; by <= 0.34; by += 0.08) {
+          const btnL = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), buttonMat);
+          btnL.position.set(-0.06, by, 0.165);
+          spine.add(btnL);
+          const btnR = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), buttonMat);
+          btnR.position.set(0.06, by, 0.165);
+          spine.add(btnR);
+        }
+      }
+
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.10, 12), skinMat);
+      neck.position.y = 0.44;
+      spine.add(neck);
+
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 0.56, 0);
+      spine.add(headGroup);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.125, 16, 16), skinMat);
+      head.castShadow = true;
+      headGroup.add(head);
+
+      if (type === 'CHEF') {
+        // Tall Chef's Toque Hat
+        const toqueMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.4 });
+        const toqueBase = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.125, 0.08, 16), toqueMat);
+        toqueBase.position.y = 0.12;
+        headGroup.add(toqueBase);
+
+        const toqueCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.26, 16), toqueMat);
+        toqueCrown.position.y = 0.27;
+        headGroup.add(toqueCrown);
+      }
+
+      // Left Arm
+      const leftShoulderPivot = new THREE.Group();
+      leftShoulderPivot.position.set(-0.21, 0.35, 0);
+      spine.add(leftShoulderPivot);
+
+      const leftUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.042, 0.24, 12), shirtMat);
+      leftUpperArm.position.y = -0.12;
+      leftShoulderPivot.add(leftUpperArm);
+
+      const leftElbowPivot = new THREE.Group();
+      leftElbowPivot.position.y = -0.24;
+      leftShoulderPivot.add(leftElbowPivot);
+
+      const leftForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.036, 0.22, 12), skinMat);
+      leftForearm.position.y = -0.11;
+      leftElbowPivot.add(leftForearm);
+
+      // Right Arm
+      const rightShoulderPivot = new THREE.Group();
+      rightShoulderPivot.position.set(0.21, 0.35, 0);
+      spine.add(rightShoulderPivot);
+
+      const rightUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.042, 0.24, 12), shirtMat);
+      rightUpperArm.position.y = -0.12;
+      rightShoulderPivot.add(rightUpperArm);
+
+      const rightElbowPivot = new THREE.Group();
+      rightElbowPivot.position.y = -0.24;
+      rightShoulderPivot.add(rightElbowPivot);
+
+      const rightForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.036, 0.22, 12), skinMat);
+      rightForearm.position.y = -0.11;
+      rightElbowPivot.add(rightForearm);
+
+      // Waiter Digital Tablet Prop
+      const tabletProp = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.18, 0.015),
+        new THREE.MeshStandardMaterial({ color: 0x0F172A, metalness: 0.8, roughness: 0.2 })
+      );
+      tabletProp.position.set(0, -0.24, 0.06);
+      tabletProp.rotation.x = Math.PI / 4;
+      tabletProp.visible = false;
+      rightElbowPivot.add(tabletProp);
+
+      // Waiter Tray Prop
+      const trayProp = new THREE.Group();
+      trayProp.position.set(0, -0.24, 0.25);
+      const trayMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.02, 16), new THREE.MeshStandardMaterial({ color: 0x64748B, metalness: 0.9 }));
+      trayProp.add(trayMesh);
+      const trayPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.10, 0.02, 12), new THREE.MeshStandardMaterial({ color: 0xFFFFFF }));
+      trayPlate.position.y = 0.02;
+      trayProp.add(trayPlate);
+      trayProp.visible = false;
+      rightElbowPivot.add(trayProp);
+
+      // Legs
+      const leftHipPivot = new THREE.Group();
+      leftHipPivot.position.set(-0.09, 0, 0);
+      pelvis.add(leftHipPivot);
+      const leftThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.052, 0.40, 12), pantsMat);
+      leftThigh.position.y = -0.20;
+      leftHipPivot.add(leftThigh);
+      const leftKneePivot = new THREE.Group();
+      leftKneePivot.position.y = -0.40;
+      leftHipPivot.add(leftKneePivot);
+      const leftCalf = new THREE.Mesh(new THREE.CylinderGeometry(0.050, 0.040, 0.38, 12), pantsMat);
+      leftCalf.position.y = -0.19;
+      leftKneePivot.add(leftCalf);
+
+      const rightHipPivot = new THREE.Group();
+      rightHipPivot.position.set(0.09, 0, 0);
+      pelvis.add(rightHipPivot);
+      const rightThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.052, 0.40, 12), pantsMat);
+      rightThigh.position.y = -0.20;
+      rightHipPivot.add(rightThigh);
+      const rightKneePivot = new THREE.Group();
+      rightKneePivot.position.y = -0.40;
+      rightHipPivot.add(rightKneePivot);
+      const rightCalf = new THREE.Mesh(new THREE.CylinderGeometry(0.050, 0.040, 0.38, 12), pantsMat);
+      rightCalf.position.y = -0.19;
+      rightKneePivot.add(rightCalf);
+
+      return {
+        group: npc,
+        pelvis: pelvis,
+        spine: spine,
+        headGroup: headGroup,
+        leftShoulderPivot: leftShoulderPivot,
+        leftElbowPivot: leftElbowPivot,
+        rightShoulderPivot: rightShoulderPivot,
+        rightElbowPivot: rightElbowPivot,
+        leftHipPivot: leftHipPivot,
+        leftKneePivot: leftKneePivot,
+        rightHipPivot: rightHipPivot,
+        rightKneePivot: rightKneePivot,
+        trayProp: trayProp,
+        tabletProp: tabletProp,
+        walkPhase: Math.random() * Math.PI * 2,
+        role: type
+      };
+    }
+
+    // 3D AUTONOMOUS AGV DELIVERY ROVER ("BELLABOT ROVER")
+    function createAutonomousDeliveryRover() {
+      const rover = new THREE.Group();
+
+      // Lower Chassis & Omni Wheel Base
+      const chassisMat = new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.25, metalness: 0.1 });
+      const darkTrimMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.4 });
+      const cyanGlowMat = new THREE.MeshStandardMaterial({ color: 0x06B6D4, emissive: 0x06B6D4, emissiveIntensity: 1.5 });
+
+      const baseSkirt = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.18, 24), darkTrimMat);
+      baseSkirt.position.y = 0.09;
+      baseSkirt.castShadow = true;
+      rover.add(baseSkirt);
+
+      // 3 Open Display Food Shelves
+      for (let sy = 0.35; sy <= 0.85; sy += 0.25) {
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.03, 0.38), darkTrimMat);
+        shelf.position.y = sy;
+        shelf.castShadow = true;
+        rover.add(shelf);
+      }
+
+      // Upper Curved Dome Head
+      const dome = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.30, 24), chassisMat);
+      dome.position.y = 1.05;
+      dome.castShadow = true;
+      rover.add(dome);
+
+      // Digital Face Screen (Curved Black Display)
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.02), darkTrimMat);
+      screen.position.set(0, 1.05, 0.28);
+      rover.add(screen);
+
+      // Animated Expressive Cyan LED Eyes
+      const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.01), cyanGlowMat);
+      eyeL.position.set(-0.065, 1.06, 0.295);
+      rover.add(eyeL);
+
+      const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.01), cyanGlowMat);
+      eyeR.position.set(0.065, 1.06, 0.295);
+      rover.add(eyeR);
+
+      // Active Lidar Laser Ring on Floor
+      const lidarRingMat = new THREE.MeshBasicMaterial({ color: 0x10B981, transparent: true, opacity: 0.4, wireframe: true });
+      const lidarRing = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.52, 24), lidarRingMat);
+      lidarRing.rotation.x = -Math.PI / 2;
+      lidarRing.position.y = 0.015;
+      rover.add(lidarRing);
+
+      // Delivery Dishes on Robot Tray
+      const robotDishes = new THREE.Group();
+      robotDishes.position.set(0, 0.62, 0);
+      const rPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.10, 0.02, 16), new THREE.MeshStandardMaterial({ color: 0xFFFFFF }));
+      robotDishes.add(rPlate);
+      const rFood = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({ color: 0xB45309 }));
+      rFood.position.y = 0.015;
+      robotDishes.add(rFood);
+      robotDishes.visible = false;
+      rover.add(robotDishes);
+
+      rover.position.copy(WAYPOINTS.ROBOT_CHARGER);
+      scene.add(rover);
+
+      return {
+        group: rover,
+        eyeL: eyeL,
+        eyeR: eyeR,
+        lidarRing: lidarRing,
+        robotDishes: robotDishes,
+        state: 'IDLE',
+        targetTable: null,
+        targetPos: WAYPOINTS.ROBOT_CHARGER.clone(),
+        moveSpeed: 2.8,
+        blinkTimer: 0,
+        role: 'ROVER'
+      };
+    }
+
+    function animateWalkCycle(model, delta, isMoving) {
+      if (isMoving) {
+        model.walkPhase += delta * 7.5;
+        const p = model.walkPhase;
+
+        model.leftHipPivot.rotation.x = Math.sin(p) * 0.48;
+        model.rightHipPivot.rotation.x = -Math.sin(p) * 0.48;
+
+        model.leftKneePivot.rotation.x = Math.max(0, -Math.sin(p) * 0.55);
+        model.rightKneePivot.rotation.x = Math.max(0, Math.sin(p) * 0.55);
+
+        if (!model.trayProp.visible && !model.tabletProp.visible) {
+          model.leftShoulderPivot.rotation.x = -Math.sin(p) * 0.38;
+          model.rightShoulderPivot.rotation.x = Math.sin(p) * 0.38;
+          model.leftElbowPivot.rotation.x = 0.25;
+          model.rightElbowPivot.rotation.x = 0.25;
+        } else {
+          model.leftShoulderPivot.rotation.x = -0.7;
+          model.leftElbowPivot.rotation.x = 1.35;
+          model.rightShoulderPivot.rotation.x = -0.7;
+          model.rightElbowPivot.rotation.x = 1.35;
+        }
+
+        model.pelvis.position.y = 0.88 + Math.abs(Math.sin(p * 2)) * 0.035;
+        model.spine.rotation.x = 0.05;
+      } else {
+        model.leftHipPivot.rotation.x = 0;
+        model.rightHipPivot.rotation.x = 0;
+        model.leftKneePivot.rotation.x = 0;
+        model.rightKneePivot.rotation.x = 0;
+        model.pelvis.position.y = 0.88;
+        model.spine.rotation.x = 0;
+      }
+    }
+
+    function buildStaffAndRobotics() {
+      // 1. Waiter
+      const waiterArt = createArticulatedNpc('WAITER');
+      waiterArt.group.position.copy(WAYPOINTS.KITCHEN_STANDBY);
+      scene.add(waiterArt.group);
+
+      waiterAgent = {
+        model: waiterArt,
+        position: waiterArt.group.position,
+        state: 'IDLE',
+        substateTimer: 0,
+        targetTable: null,
+        targetPos: WAYPOINTS.KITCHEN_STANDBY.clone(),
+        moveSpeed: CONFIG.waiterSpeed
+      };
+
+      // 2. Busboy
+      const busboyArt = createArticulatedNpc('BUSBOY');
+      busboyArt.group.position.copy(WAYPOINTS.BUSBOY_STANDBY);
+      scene.add(busboyArt.group);
+
+      busboyAgent = {
+        model: busboyArt,
+        position: busboyArt.group.position,
+        state: 'IDLE',
+        targetTable: null,
+        targetPos: WAYPOINTS.BUSBOY_STANDBY.clone(),
+        cleanTimer: 0,
+        moveSpeed: 3.0
+      };
+
+      // 3. Kitchen Chef NPC
+      const chefArt = createArticulatedNpc('CHEF');
+      chefArt.group.position.copy(WAYPOINTS.CHEF_STATION);
+      chefArt.group.rotation.y = 0; // Looking towards the dining floor
+      scene.add(chefArt.group);
+
+      chefAgent = {
+        model: chefArt,
+        cookCycleTimer: 0
+      };
+
+      // 4. Autonomous AGV Food Delivery Rover
+      roboRunner = createAutonomousDeliveryRover();
+    }
+
+    // =========================================================================
+    // 7. CUSTOMER PARTY CREATION & FINANCIAL ASSIGNMENT
+    // =========================================================================
+    let partyIdCounter = 101;
+
+    function spawnCustomerParty() {
+      const size = Math.floor(Math.random() * 3) + 2;
+      const billEstimate = size * (26 + Math.floor(Math.random() * 14));
+
+      const party = {
+        id: partyIdCounter++,
+        size: size,
+        billAmount: billEstimate,
+        status: 'IN_QUEUE',
+        assignedTable: null,
+        npcs: [],
+        spawnTime: clock.getElapsedTime()
+      };
+
+      const casualColors = [0x3B82F6, 0x10B981, 0xEC4899, 0x8B5CF6, 0xF97316, 0x06B6D4];
+
+      for (let i = 0; i < size; i++) {
+        const col = casualColors[Math.floor(Math.random() * casualColors.length)];
+        const npcObj = createArticulatedNpc('CUSTOMER', col);
+        npcObj.group.position.copy(WAYPOINTS.SPAWN).add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 0, (Math.random() - 0.5) * 0.8));
+        scene.add(npcObj.group);
+
+        party.npcs.push({
+          model: npcObj,
+          targetPos: npcObj.group.position.clone(),
+          chairIndex: i,
+          isSeated: false
+        });
+      }
+
+      customers.push(party);
+      queueLine.push(party);
+      updateQueuePositions();
+      renderQueueUI();
+
+      logMqtt('entrance/queue', {
+        event: 'PARTY_ARRIVED',
+        party_id: party.id,
+        pax: party.size,
+        est_check: '$' + party.billAmount.toFixed(2),
+        queue_len: queueLine.length
+      });
+    }
+
+    function updateQueuePositions() {
+      queueLine.forEach((party, queueIdx) => {
+        const baseZ = WAYPOINTS.QUEUE_START.z - queueIdx * 1.5;
+        const targetPoint = new THREE.Vector3(WAYPOINTS.QUEUE_START.x, 0, baseZ);
+
+        party.npcs.forEach((member, mIdx) => {
+          const offset = new THREE.Vector3((mIdx % 2 === 0 ? 0.35 : -0.35), 0, (mIdx > 1 ? -0.4 : 0.4));
+          member.targetPos = targetPoint.clone().add(offset);
+        });
+      });
+    }
+
+    function dispatchQueueToAvailableTable() {
+      if (queueLine.length === 0) return;
+
+      const freeTable = tables.find(t => t.state === TABLE_STATES.FREE_CLEAN.id && !t.seatedParty);
+      if (!freeTable) return;
+
+      const party = queueLine.shift();
+      party.status = 'WALKING_TO_TABLE';
+      party.assignedTable = freeTable;
+      freeTable.seatedParty = party;
+      freeTable.currentBill = party.billAmount;
+
+      party.npcs.forEach((member, i) => {
+        const chair = freeTable.chairSlots[i % freeTable.chairSlots.length];
+        const chairWorldPos = freeTable.position.clone().add(chair.localPos);
+        chairWorldPos.y = 0;
+        member.targetPos = chairWorldPos;
+        member.targetChair = chair;
+      });
+
+      updateQueuePositions();
+      renderQueueUI();
+    }
+
+    // =========================================================================
+    // 8. TABLE STATE MACHINE & BILL SETTLEMENT
+    // =========================================================================
+    function setTableState(table, newStateKey) {
+      if (!TABLE_STATES[newStateKey]) return;
+
+      table.state = newStateKey;
+      table.stateDef = TABLE_STATES[newStateKey];
+      table.timer = 0;
+
+      table.ledRingMat.color.setHex(table.stateDef.hexNum);
+      table.ledRingMat.emissive.setHex(table.stateDef.hexNum);
+
+      if (newStateKey === TABLE_STATES.FREE_CLEAN.id) {
+        table.dishesGroup.visible = false;
+        table.seatedParty = null;
+        table.orderWaitTimer = 0;
+        table.foodWaitTimer = 0;
+        table.patience = 100;
+        table.angerLevel = 0;
+        table.kitchenCookTimer = 0;
+        table.isFoodCooked = false;
+        table.isWaiterAssigned = false;
+        table.currentBill = 0;
+        table.eatingRemaining = CONFIG.timings.eatingDuration;
+      } else if (newStateKey === TABLE_STATES.WAITING_FOR_ORDER.id) {
+        table.dishesGroup.visible = false;
+        table.orderWaitTimer = 0;
+        table.foodWaitTimer = 0;
+        table.patience = 100;
+        table.angerLevel = 0;
+        table.isWaiterAssigned = false;
+      } else if (newStateKey === TABLE_STATES.WAITING_FOR_FOOD.id) {
+        table.dishesGroup.visible = false;
+        table.foodWaitTimer = 0;
+        table.kitchenCookTimer = 0;
+        table.isFoodCooked = false;
+        table.isWaiterAssigned = false;
+      } else if (newStateKey === TABLE_STATES.EATING_SERVED.id) {
+        table.dishesGroup.visible = true;
+        table.eatingRemaining = CONFIG.timings.eatingDuration;
+      } else if (newStateKey === TABLE_STATES.BILL_REQUESTED.id) {
+        table.eatingRemaining = Math.min(table.eatingRemaining, CONFIG.timings.billDuration);
+      } else if (newStateKey === TABLE_STATES.DIRTY_UNCLEARED.id) {
+        table.dishesGroup.visible = true;
+        if (table.currentBill > 0) {
+          STATS.totalRevenue += table.currentBill;
+          STATS.totalPartiesCompleted++;
+          playCashChime();
+          logMqtt('billing/settled', {
+            table: table.code,
+            amount: '$' + table.currentBill.toFixed(2),
+            new_daily_total: '$' + STATS.totalRevenue.toFixed(2)
+          });
+        }
+        table.seatedParty = null;
+        if (busboyAgent.state === 'IDLE') {
+          dispatchBusboy(table);
+        }
+      }
+
+      updateSelectedTableCard();
+      updateTopBarStats();
+      calculateGlobalWaitTime();
+    }
+
+    function dispatchBusboy(targetTable) {
+      busboyAgent.state = 'WALKING_TO_TABLE';
+      busboyAgent.targetTable = targetTable;
+      busboyAgent.targetPos = targetTable.position.clone().add(new THREE.Vector3(1.2, 0, 0));
+      busboyAgent.cleanTimer = 0;
+    }
+
+    // =========================================================================
+    // 9. ANIMATIONS & MULTI-AGENT / ROBOTICS SIMULATION LOOP
+    // =========================================================================
+    function updateMultiAgentSimulation(delta) {
+      const scaledDelta = delta * CONFIG.timeScale;
+      let activeAngryCount = 0;
+
+      // Chef NPC Cooking Animation Loop
+      if (chefAgent) {
+        chefAgent.cookCycleTimer += scaledDelta * 3.5;
+        const cModel = chefAgent.model;
+        cModel.leftShoulderPivot.rotation.x = -0.7 + Math.sin(chefAgent.cookCycleTimer) * 0.15;
+        cModel.leftElbowPivot.rotation.x = 1.1;
+        cModel.rightShoulderPivot.rotation.x = -0.8 + Math.cos(chefAgent.cookCycleTimer * 2) * 0.25;
+        cModel.rightElbowPivot.rotation.x = 1.2;
+      }
+
+      // Tables Update
+      tables.forEach(table => {
+        table.timer += scaledDelta;
+
+        if (table.state === TABLE_STATES.WAITING_FOR_ORDER.id) {
+          table.orderWaitTimer += scaledDelta;
+
+          const maxOrderWait = CONFIG.timings.maxOrderWaitPatience;
+          const ratio = Math.max(0, 1 - (table.orderWaitTimer / maxOrderWait));
+          table.patience = Math.round(ratio * 100);
+
+          if (table.patience > 75) {
+            table.angerLevel = 0;
+          } else if (table.patience > 45) {
+            table.angerLevel = 1;
+          } else if (table.patience > 20) {
+            table.angerLevel = 2;
+          } else {
+            table.angerLevel = 3;
+            activeAngryCount++;
+            if (!table.hasLoggedSla) {
+              table.hasLoggedSla = true;
+              STATS.slaBreaches++;
+              logMqtt('alert/sla_breach', {
+                table: table.code,
+                phase: 'WAITING_FOR_ORDER',
+                wait_sec: Math.round(table.orderWaitTimer)
+              });
+            }
+          }
+
+        } else if (table.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+          table.foodWaitTimer += scaledDelta;
+
+          if (!table.isFoodCooked) {
+            table.kitchenCookTimer += scaledDelta;
+            if (table.kitchenCookTimer >= CONFIG.timings.kitchenCookDuration) {
+              table.isFoodCooked = true;
+              playBellSound();
+              logMqtt('kitchen/cooked', {
+                table: table.code,
+                cook_time: Math.round(table.kitchenCookTimer) + 's',
+                status: 'FOOD_READY_AT_PASS'
+              });
+            }
+          }
+
+          const maxFoodWait = CONFIG.timings.maxFoodWaitPatience;
+          const ratio = Math.max(0, 1 - (table.foodWaitTimer / maxFoodWait));
+          table.patience = Math.round(ratio * 100);
+
+          if (table.patience > 75) {
+            table.angerLevel = 0;
+          } else if (table.patience > 45) {
+            table.angerLevel = 1;
+          } else if (table.patience > 20) {
+            table.angerLevel = 2;
+          } else {
+            table.angerLevel = 3;
+            activeAngryCount++;
+            if (!table.hasLoggedSla) {
+              table.hasLoggedSla = true;
+              STATS.slaBreaches++;
+              logMqtt('alert/sla_breach', {
+                table: table.code,
+                phase: 'WAITING_FOR_FOOD',
+                wait_sec: Math.round(table.foodWaitTimer)
+              });
+            }
+          }
+
+        } else if (table.state === TABLE_STATES.EATING_SERVED.id) {
+          table.eatingRemaining -= scaledDelta;
+          if (table.eatingRemaining <= 0) {
+            customerPartyFinishMeal(table);
+          }
+        } else if (table.state === TABLE_STATES.BILL_REQUESTED.id) {
+          table.eatingRemaining -= scaledDelta;
+          if (table.eatingRemaining <= 0) {
+            customerPartyFinishMeal(table);
+          }
+        } else if (table.state === TABLE_STATES.DIRTY_UNCLEARED.id) {
+          if (busboyAgent.state === 'IDLE' && busboyAgent.targetTable === null) {
+            dispatchBusboy(table);
+          }
+        }
+      });
+
+      // Update Angry Alert in Navbar
+      const navAngryBadge = document.getElementById('nav-angry-badge');
+      const navAngryCount = document.getElementById('nav-angry-count-text');
+      if (activeAngryCount > 0) {
+        navAngryBadge.classList.remove('hidden');
+        navAngryCount.textContent = `${activeAngryCount} Delayed`;
+      } else {
+        navAngryBadge.classList.add('hidden');
+      }
+
+      // Live CSAT
+      let totalPatienceSum = 0;
+      let seatedCount = 0;
+      tables.forEach(t => {
+        if (t.state === TABLE_STATES.WAITING_FOR_ORDER.id || t.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+          totalPatienceSum += t.patience;
+          seatedCount++;
+        } else if (t.state === TABLE_STATES.EATING_SERVED.id || t.state === TABLE_STATES.BILL_REQUESTED.id) {
+          totalPatienceSum += 95;
+          seatedCount++;
+        }
+      });
+      STATS.currentCsat = seatedCount > 0 ? Math.round(totalPatienceSum / seatedCount) : 98;
+
+      // =======================================================================
+      // HUMAN WAITER FSM (Takes orders & assists delivery)
+      // =======================================================================
+      if (waiterAgent) {
+        const w = waiterAgent;
+        w.moveSpeed = CONFIG.waiterSpeed;
+        const currentPos = w.model.group.position;
+        const dist = currentPos.distanceTo(w.targetPos);
+
+        if (w.state === 'IDLE') {
+          // If Rover is busy or not delivering, waiter can deliver ready food
+          const readyFoodTable = tables.find(t => t.state === TABLE_STATES.WAITING_FOR_FOOD.id && t.isFoodCooked && !t.isWaiterAssigned);
+          const needOrderTable = tables.find(t => t.state === TABLE_STATES.WAITING_FOR_ORDER.id && !t.isWaiterAssigned);
+
+          if (needOrderTable) {
+            w.state = 'WALKING_TO_TAKE_ORDER';
+            w.targetTable = needOrderTable;
+            needOrderTable.isWaiterAssigned = true;
+            w.targetPos = needOrderTable.position.clone().add(new THREE.Vector3(0, 0, -1.8));
+            w.model.trayProp.visible = false;
+            w.model.tabletProp.visible = true;
+          } else if (readyFoodTable && roboRunner.state !== 'IDLE') {
+            w.state = 'WALKING_TO_FETCH_FOOD';
+            w.targetTable = readyFoodTable;
+            readyFoodTable.isWaiterAssigned = true;
+            w.targetPos = WAYPOINTS.KITCHEN_PASS.clone();
+            w.model.trayProp.visible = false;
+            w.model.tabletProp.visible = false;
+          }
+        }
+
+        if (w.state === 'TAKING_ORDER') {
+          w.substateTimer += scaledDelta;
+          animateWalkCycle(w.model, scaledDelta, false);
+          w.model.rightShoulderPivot.rotation.x = -0.9 + Math.sin(w.substateTimer * 8) * 0.05;
+          w.model.rightElbowPivot.rotation.x = 1.1;
+
+          if (w.substateTimer >= CONFIG.timings.takingOrderDuration) {
+            const t = w.targetTable;
+            STATS.totalOrderWaitTimes.push(t.orderWaitTimer);
+            if (t.orderWaitTimer > STATS.peakOrderWaitObserved) {
+              STATS.peakOrderWaitObserved = Math.round(t.orderWaitTimer);
+            }
+            logMqtt('staff/waiter', { action: 'ORDER_TAKEN', table: t.code, order_wait_s: Math.round(t.orderWaitTimer) });
+
+            setTableState(t, TABLE_STATES.WAITING_FOR_FOOD.id);
+            w.model.tabletProp.visible = false;
+            w.state = 'SUBMITTING_ORDER_TO_KITCHEN';
+            w.targetPos = WAYPOINTS.KITCHEN_PASS.clone();
+            w.substateTimer = 0;
+          }
+        } else if (dist > 0.15) {
+          const dir = new THREE.Vector3().subVectors(w.targetPos, currentPos).normalize();
+          currentPos.addScaledVector(dir, Math.min(dist, w.moveSpeed * scaledDelta));
+          w.model.group.rotation.y = Math.atan2(dir.x, dir.z);
+          animateWalkCycle(w.model, scaledDelta, true);
+          recordFootfall(currentPos.x, currentPos.z, 0.05);
+        } else {
+          animateWalkCycle(w.model, scaledDelta, false);
+
+          if (w.state === 'WALKING_TO_TAKE_ORDER') {
+            w.state = 'TAKING_ORDER';
+            w.substateTimer = 0;
+          } else if (w.state === 'SUBMITTING_ORDER_TO_KITCHEN') {
+            w.state = 'IDLE';
+            w.targetTable = null;
+          } else if (w.state === 'WALKING_TO_FETCH_FOOD') {
+            w.model.trayProp.visible = true;
+            w.state = 'DELIVERING_FOOD';
+            w.targetPos = w.targetTable.position.clone().add(new THREE.Vector3(0, 0, -1.8));
+          } else if (w.state === 'DELIVERING_FOOD') {
+            w.model.trayProp.visible = false;
+            const t = w.targetTable;
+            STATS.totalFoodWaitTimes.push(t.foodWaitTimer);
+            if (t.foodWaitTimer > STATS.peakFoodWaitObserved) {
+              STATS.peakFoodWaitObserved = Math.round(t.foodWaitTimer);
+            }
+            logMqtt('staff/waiter', { action: 'FOOD_DELIVERED', table: t.code, food_wait_s: Math.round(t.foodWaitTimer) });
+            setTableState(t, TABLE_STATES.EATING_SERVED.id);
+            w.targetTable = null;
+            w.state = 'RETURNING';
+            w.targetPos = WAYPOINTS.KITCHEN_STANDBY.clone();
+          } else if (w.state === 'RETURNING') {
+            w.state = 'IDLE';
+          }
+        }
+      }
+
+      // =======================================================================
+      // AUTONOMOUS AGV DELIVERY ROVER FSM ("ROBOWAYTER BELLABOT")
+      // =======================================================================
+      if (roboRunner) {
+        const r = roboRunner;
+        const currentPos = r.group.position;
+        const dist = currentPos.distanceTo(r.targetPos);
+
+        // Lidar beam rotation
+        r.lidarRing.rotation.z += scaledDelta * 4;
+
+        // Eye Blink Timer
+        r.blinkTimer += scaledDelta;
+        if (r.blinkTimer > 3.0) {
+          r.eyeL.scale.y = 0.2;
+          r.eyeR.scale.y = 0.2;
+          if (r.blinkTimer > 3.2) {
+            r.eyeL.scale.y = 1.0;
+            r.eyeR.scale.y = 1.0;
+            r.blinkTimer = 0;
+          }
+        }
+
+        // Search for food delivery task
+        if (r.state === 'IDLE') {
+          const readyFoodTable = tables.find(t => t.state === TABLE_STATES.WAITING_FOR_FOOD.id && t.isFoodCooked && !t.isWaiterAssigned);
+          if (readyFoodTable) {
+            r.state = 'FETCHING_FROM_KITCHEN';
+            r.targetTable = readyFoodTable;
+            readyFoodTable.isWaiterAssigned = true;
+            r.targetPos = WAYPOINTS.KITCHEN_PASS.clone().add(new THREE.Vector3(-1.2, 0, 0));
+            document.getElementById('hud-robot-status').textContent = `AGV BellaBot [FETCHING: ${readyFoodTable.code}]`;
+          }
+        }
+
+        if (dist > 0.15) {
+          const dir = new THREE.Vector3().subVectors(r.targetPos, currentPos).normalize();
+          currentPos.addScaledVector(dir, Math.min(dist, r.moveSpeed * scaledDelta));
+          r.group.rotation.y = Math.atan2(dir.x, dir.z);
+          recordFootfall(currentPos.x, currentPos.z, 0.08);
+        } else {
+          if (r.state === 'FETCHING_FROM_KITCHEN') {
+            r.robotDishes.visible = true;
+            r.state = 'DELIVERING_TO_TABLE';
+            r.targetPos = r.targetTable.position.clone().add(new THREE.Vector3(0, 0, 1.8));
+            document.getElementById('hud-robot-status').textContent = `AGV BellaBot [DELIVERING: ${r.targetTable.code}]`;
+          } else if (r.state === 'DELIVERING_TO_TABLE') {
+            r.robotDishes.visible = false;
+            const t = r.targetTable;
+            STATS.totalFoodWaitTimes.push(t.foodWaitTimer);
+            STATS.robotDeliveries++;
+            if (t.foodWaitTimer > STATS.peakFoodWaitObserved) {
+              STATS.peakFoodWaitObserved = Math.round(t.foodWaitTimer);
+            }
+            logMqtt('robot/delivery', { rover: 'BELLABOT_01', table: t.code, food_wait_s: Math.round(t.foodWaitTimer), total_robot_runs: STATS.robotDeliveries });
+            setTableState(t, TABLE_STATES.EATING_SERVED.id);
+            r.targetTable = null;
+            r.state = 'RETURNING_TO_DOCK';
+            r.targetPos = WAYPOINTS.ROBOT_CHARGER.clone();
+            document.getElementById('hud-robot-status').textContent = `AGV BellaBot [RETURNING TO DOCK]`;
+          } else if (r.state === 'RETURNING_TO_DOCK') {
+            r.state = 'IDLE';
+            r.group.rotation.y = 0;
+            document.getElementById('hud-robot-status').textContent = `AGV BellaBot [CHARGING / STANDBY]`;
+          }
+        }
+      }
+
+      // Busboy FSM
+      if (busboyAgent) {
+        const b = busboyAgent;
+        const currentPos = b.model.group.position;
+        const dist = currentPos.distanceTo(b.targetPos);
+
+        if (b.state === 'CLEANING') {
+          b.cleanTimer += scaledDelta;
+          b.model.leftShoulderPivot.rotation.x = Math.sin(b.cleanTimer * 9) * 0.45 - 0.6;
+          b.model.rightShoulderPivot.rotation.x = Math.cos(b.cleanTimer * 9) * 0.45 - 0.6;
+          b.model.leftElbowPivot.rotation.x = 0.65;
+          b.model.rightElbowPivot.rotation.x = 0.65;
+
+          if (b.cleanTimer >= CONFIG.timings.cleaningDuration) {
+            setTableState(b.targetTable, TABLE_STATES.FREE_CLEAN.id);
+            b.targetTable = null;
+            b.state = 'RETURNING';
+            b.targetPos = WAYPOINTS.BUSBOY_STANDBY.clone();
+            b.cleanTimer = 0;
+          }
+        } else if (dist > 0.15) {
+          const dir = new THREE.Vector3().subVectors(b.targetPos, currentPos).normalize();
+          currentPos.addScaledVector(dir, Math.min(dist, b.moveSpeed * scaledDelta));
+          b.model.group.rotation.y = Math.atan2(dir.x, dir.z);
+          animateWalkCycle(b.model, scaledDelta, true);
+          recordFootfall(currentPos.x, currentPos.z, 0.05);
+        } else {
+          animateWalkCycle(b.model, scaledDelta, false);
+
+          if (b.state === 'WALKING_TO_TABLE') {
+            b.state = 'CLEANING';
+            b.cleanTimer = 0;
+          } else if (b.state === 'RETURNING') {
+            b.state = 'IDLE';
+            const nextDirty = tables.find(t => t.state === TABLE_STATES.DIRTY_UNCLEARED.id);
+            if (nextDirty) {
+              dispatchBusboy(nextDirty);
+            }
+          }
+        }
+      }
+
+      // Customers Navigation
+      for (let pIdx = customers.length - 1; pIdx >= 0; pIdx--) {
+        const party = customers[pIdx];
+
+        if (party.status === 'WALKING_TO_TABLE') {
+          let allArrived = true;
+          party.npcs.forEach(m => {
+            const currentPos = m.model.group.position;
+            const d = currentPos.distanceTo(m.targetPos);
+            if (d > 0.15) {
+              allArrived = false;
+              const dir = new THREE.Vector3().subVectors(m.targetPos, currentPos).normalize();
+              currentPos.addScaledVector(dir, Math.min(d, 2.4 * scaledDelta));
+              m.model.group.rotation.y = Math.atan2(dir.x, dir.z);
+              animateWalkCycle(m.model, scaledDelta, true);
+              recordFootfall(currentPos.x, currentPos.z, 0.04);
+            } else {
+              animateWalkCycle(m.model, scaledDelta, false);
+              if (!m.isSeated && m.targetChair) {
+                m.isSeated = true;
+                m.model.pelvis.position.y = 0.58;
+                m.model.leftHipPivot.rotation.x = -Math.PI / 2 + 0.08;
+                m.model.rightHipPivot.rotation.x = -Math.PI / 2 + 0.08;
+                m.model.leftKneePivot.rotation.x = Math.PI / 2 - 0.08;
+                m.model.rightKneePivot.rotation.x = Math.PI / 2 - 0.08;
+                m.model.group.rotation.y = m.targetChair.rotY + Math.PI;
+                if (m.model.spine) m.model.spine.rotation.x = 0.10;
+                m.model.leftShoulderPivot.rotation.x = -0.45;
+                m.model.leftElbowPivot.rotation.x = 0.75;
+                m.model.rightShoulderPivot.rotation.x = -0.45;
+                m.model.rightElbowPivot.rotation.x = 0.75;
+              }
+            }
+          });
+
+          if (allArrived) {
+            party.status = 'SEATED';
+            setTableState(party.assignedTable, TABLE_STATES.WAITING_FOR_ORDER.id);
+          }
+        } else if (party.status === 'SEATED') {
+          const table = party.assignedTable;
+          party.npcs.forEach((m, i) => {
+            const time = clock.getElapsedTime() * 2 + i;
+            if (table.angerLevel >= 2) {
+              m.model.rightShoulderPivot.rotation.x = -1.4 + Math.sin(time * 3) * 0.35;
+              m.model.rightElbowPivot.rotation.x = 0.4;
+            } else {
+              m.model.leftShoulderPivot.rotation.x = -0.45 + Math.sin(time) * 0.06;
+              m.model.leftElbowPivot.rotation.x = 0.75;
+              m.model.rightShoulderPivot.rotation.x = -0.45 + Math.cos(time * 1.2) * 0.06;
+              m.model.rightElbowPivot.rotation.x = 0.75;
+            }
+          });
+        } else if (party.status === 'LEAVING') {
+          let allExited = true;
+          party.npcs.forEach(m => {
+            const currentPos = m.model.group.position;
+            const d = currentPos.distanceTo(WAYPOINTS.EXIT_DOOR);
+            if (d > 0.3) {
+              allExited = false;
+              const dir = new THREE.Vector3().subVectors(WAYPOINTS.EXIT_DOOR, currentPos).normalize();
+              currentPos.addScaledVector(dir, Math.min(d, 2.6 * scaledDelta));
+              m.model.group.rotation.y = Math.atan2(dir.x, dir.z);
+              animateWalkCycle(m.model, scaledDelta, true);
+              recordFootfall(currentPos.x, currentPos.z, 0.04);
+            }
+          });
+
+          if (allExited) {
+            party.npcs.forEach(m => scene.remove(m.model.group));
+            customers.splice(pIdx, 1);
+            STATS.totalGuestsToday += party.size;
+          }
+        }
+      }
+
+      dispatchQueueToAvailableTable();
+    }
+
+    function customerPartyFinishMeal(table) {
+      if (!table.seatedParty) return;
+
+      const party = table.seatedParty;
+      party.status = 'LEAVING';
+
+      party.npcs.forEach(m => {
+        m.isSeated = false;
+        m.model.pelvis.position.y = 0.88;
+        m.model.leftHipPivot.rotation.x = 0;
+        m.model.rightHipPivot.rotation.x = 0;
+        m.model.leftKneePivot.rotation.x = 0;
+        m.model.rightKneePivot.rotation.x = 0;
+        m.targetPos = WAYPOINTS.EXIT_DOOR.clone();
+      });
+
+      setTableState(table, TABLE_STATES.DIRTY_UNCLEARED.id);
+    }
+
+    // =========================================================================
+    // 10. SCREEN-SPACE 2D YOLO BOUNDING BOXES & POSE SKELETON PROJECTIONS
+    // =========================================================================
+    function updateCvBoundingBoxes() {
+      const hudLayer = document.getElementById('yolo-hud-layer');
+      if (!CONFIG.showCvHud || CONFIG.currentCameraMode === 'QUAD') {
+        hudLayer.style.display = 'none';
+      } else {
+        hudLayer.style.display = 'block';
+      }
+
+      tables.forEach(table => {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let isVisible = false;
+
+        table.corners.forEach(corner => {
+          const v = corner.clone().project(activeCamera);
+          if (v.z < 1.0) {
+            isVisible = true;
+            const screenX = (v.x * 0.5 + 0.5) * viewportWidth;
+            const screenY = (-(v.y * 0.5) + 0.5) * viewportHeight;
+
+            if (screenX < minX) minX = screenX;
+            if (screenX > maxX) maxX = screenX;
+            if (screenY < minY) minY = screenY;
+            if (screenY > maxY) maxY = screenY;
+          }
+        });
+
+        if (!table.hudElement) {
+          const boxEl = document.createElement('div');
+          boxEl.className = 'yolo-box-container';
+          boxEl.innerHTML = `
+            <div class="yolo-box-border"></div>
+            <div class="yolo-corner yolo-corner-tl"></div>
+            <div class="yolo-corner yolo-corner-tr"></div>
+            <div class="yolo-corner yolo-corner-bl"></div>
+            <div class="yolo-corner yolo-corner-br"></div>
+            <div class="yolo-header absolute -top-5 left-0 flex items-center space-x-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-white shadow-sm whitespace-nowrap">
+              <span class="yolo-mood-emoji text-xs"></span>
+              <span class="yolo-id font-extrabold font-tabular"></span>
+              <span class="yolo-state text-[9px] opacity-90"></span>
+              <span class="yolo-conf text-[9px] bg-black/30 px-1 rounded font-tabular"></span>
+            </div>
+            <div class="yolo-patience-wrap absolute -top-1.5 inset-x-1 h-1 bg-black/30 rounded-full overflow-hidden hidden">
+              <div class="yolo-patience-fill h-full bg-emerald-500 transition-all duration-300"></div>
+            </div>
+            <div class="yolo-footer absolute -bottom-6 left-0 flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-slate-800 bg-white/95 border border-slate-300 shadow-sm whitespace-nowrap font-tabular">
+              <span class="yolo-timer"></span>
+            </div>
+          `;
+          hudLayer.appendChild(boxEl);
+          table.hudElement = boxEl;
+        }
+
+        const el = table.hudElement;
+
+        if (!isVisible || CONFIG.currentCameraMode === 'QUAD') {
+          el.style.opacity = '0';
+          return;
+        }
+
+        const pad = 6;
+        const boxLeft = Math.max(0, minX - pad);
+        const boxTop = Math.max(0, minY - pad);
+        const boxWidth = (maxX - minX) + pad * 2;
+        const boxHeight = (maxY - minY) + pad * 2;
+
+        el.style.opacity = '1';
+        el.style.transform = `translate3d(${boxLeft}px, ${boxTop}px, 0)`;
+        el.style.width = `${boxWidth}px`;
+        el.style.height = `${boxHeight}px`;
+
+        const stateColor = table.stateDef.color;
+        const borderEl = el.querySelector('.yolo-box-border');
+        borderEl.style.borderColor = `${stateColor}CC`;
+        borderEl.style.backgroundColor = `${stateColor}15`;
+
+        if ((table.state === TABLE_STATES.WAITING_FOR_ORDER.id || table.state === TABLE_STATES.WAITING_FOR_FOOD.id) && table.angerLevel === 3) {
+          borderEl.classList.add('angry-pulse-box');
+          borderEl.style.borderColor = '#EF4444';
+          borderEl.style.backgroundColor = 'rgba(239, 68, 68, 0.18)';
+        } else {
+          borderEl.classList.remove('angry-pulse-box');
+        }
+
+        el.querySelectorAll('.yolo-corner').forEach(c => {
+          c.style.borderColor = table.angerLevel === 3 && (table.state === TABLE_STATES.WAITING_FOR_ORDER.id || table.state === TABLE_STATES.WAITING_FOR_FOOD.id) ? '#EF4444' : stateColor;
+        });
+
+        const headerEl = el.querySelector('.yolo-header');
+        headerEl.style.backgroundColor = table.angerLevel === 3 && (table.state === TABLE_STATES.WAITING_FOR_ORDER.id || table.state === TABLE_STATES.WAITING_FOR_FOOD.id) ? '#EF4444' : stateColor;
+        el.querySelector('.yolo-id').textContent = table.code;
+        el.querySelector('.yolo-state').textContent = `| ${table.stateDef.label}`;
+        el.querySelector('.yolo-conf').textContent = `conf: ${table.confidence}`;
+
+        const patienceWrap = el.querySelector('.yolo-patience-wrap');
+        const patienceFill = el.querySelector('.yolo-patience-fill');
+        const moodEmoji = el.querySelector('.yolo-mood-emoji');
+
+        if (table.state === TABLE_STATES.WAITING_FOR_ORDER.id || table.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+          patienceWrap.classList.remove('hidden');
+          patienceFill.style.width = `${table.patience}%`;
+          const mood = ANGER_LEVELS[table.angerLevel];
+          moodEmoji.textContent = mood.emoji;
+          patienceFill.style.backgroundColor = mood.color;
+        } else {
+          patienceWrap.classList.add('hidden');
+          moodEmoji.textContent = '';
+        }
+
+        const footerTimer = el.querySelector('.yolo-timer');
+        if (table.state === TABLE_STATES.FREE_CLEAN.id) {
+          footerTimer.innerHTML = `<span class="text-emerald-700 font-bold">● Clean Table | Ready</span>`;
+        } else if (table.state === TABLE_STATES.WAITING_FOR_ORDER.id) {
+          const waitSec = Math.floor(table.orderWaitTimer);
+          const mm = String(Math.floor(waitSec / 60)).padStart(2, '0');
+          const ss = String(waitSec % 60).padStart(2, '0');
+          const mood = ANGER_LEVELS[table.angerLevel];
+          footerTimer.innerHTML = `<span style="color: ${mood.color}">📋 Wait Order: ${mm}:${ss} [${mood.name.toUpperCase()}]</span>`;
+        } else if (table.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+          const waitSec = Math.floor(table.foodWaitTimer);
+          const mm = String(Math.floor(waitSec / 60)).padStart(2, '0');
+          const ss = String(waitSec % 60).padStart(2, '0');
+          const mood = ANGER_LEVELS[table.angerLevel];
+          footerTimer.innerHTML = `<span style="color: ${mood.color}">🍽 Wait Food: ${mm}:${ss} [${mood.name.toUpperCase()}]</span>`;
+        } else if (table.state === TABLE_STATES.EATING_SERVED.id || table.state === TABLE_STATES.BILL_REQUESTED.id) {
+          const remSec = Math.max(0, Math.floor(table.eatingRemaining));
+          const mm = String(Math.floor(remSec / 60)).padStart(2, '0');
+          const ss = String(remSec % 60).padStart(2, '0');
+          footerTimer.innerHTML = `<span class="text-blue-700">🍽 Dining | Est. Free: ${mm}:${ss}</span>`;
+        } else if (table.state === TABLE_STATES.DIRTY_UNCLEARED.id) {
+          footerTimer.innerHTML = `<span class="text-amber-800">🧹 Dishes Left | Busboy Cleans</span>`;
+        }
+      });
+
+      // Update 2D YOLO Pose Keypoint Skeletons
+      updateYoloPoseSkeletons();
+    }
+
+    function updateYoloPoseSkeletons() {
+      const svg = document.getElementById('pose-svg-layer');
+      if (!CONFIG.showPoseSkeletons || CONFIG.currentCameraMode === 'QUAD') {
+        svg.innerHTML = '';
+        return;
+      }
+
+      // Collect active articulated models
+      const activeModels = [];
+      if (waiterAgent) activeModels.push({ model: waiterAgent.model, color: '#F59E0B' }); // Gold
+      if (busboyAgent) activeModels.push({ model: busboyAgent.model, color: '#D97706' }); // Amber
+      if (chefAgent) activeModels.push({ model: chefAgent.model, color: '#10B981' });   // Green
+      customers.forEach(party => {
+        party.npcs.forEach(m => activeModels.push({ model: m.model, color: '#06B6D4' })); // Cyan
+      });
+
+      let svgContent = '';
+
+      activeModels.forEach(({ model, color }) => {
+        const rootPos = model.group.position;
+        // Joint offsets relative to character root
+        const joints = {
+          head: rootPos.clone().add(new THREE.Vector3(0, 1.45, 0)),
+          spine: rootPos.clone().add(new THREE.Vector3(0, 1.15, 0)),
+          lShoulder: rootPos.clone().add(new THREE.Vector3(-0.21, 1.25, 0)),
+          rShoulder: rootPos.clone().add(new THREE.Vector3(0.21, 1.25, 0)),
+          lElbow: rootPos.clone().add(new THREE.Vector3(-0.24, 0.98, 0.1)),
+          rElbow: rootPos.clone().add(new THREE.Vector3(0.24, 0.98, 0.1)),
+          lHand: rootPos.clone().add(new THREE.Vector3(-0.24, 0.75, 0.2)),
+          rHand: rootPos.clone().add(new THREE.Vector3(0.24, 0.75, 0.2)),
+          lHip: rootPos.clone().add(new THREE.Vector3(-0.12, 0.88, 0)),
+          rHip: rootPos.clone().add(new THREE.Vector3(0.12, 0.88, 0)),
+          lKnee: rootPos.clone().add(new THREE.Vector3(-0.12, 0.48, 0.05)),
+          rKnee: rootPos.clone().add(new THREE.Vector3(0.12, 0.48, 0.05)),
+          lAnkle: rootPos.clone().add(new THREE.Vector3(-0.12, 0.08, 0.05)),
+          rAnkle: rootPos.clone().add(new THREE.Vector3(0.12, 0.08, 0.05))
+        };
+
+        const screenJoints = {};
+        let isAnyVisible = false;
+
+        for (const [key, v3] of Object.entries(joints)) {
+          const p = v3.clone().project(activeCamera);
+          if (p.z < 1.0) {
+            isAnyVisible = true;
+            screenJoints[key] = {
+              x: (p.x * 0.5 + 0.5) * viewportWidth,
+              y: (-(p.y * 0.5) + 0.5) * viewportHeight
+            };
+          }
+        }
+
+        if (!isAnyVisible) return;
+
+        // Draw Skeleton Bones
+        const bones = [
+          ['head', 'spine'],
+          ['spine', 'lShoulder'], ['spine', 'rShoulder'],
+          ['lShoulder', 'lElbow'], ['lElbow', 'lHand'],
+          ['rShoulder', 'rElbow'], ['rElbow', 'rHand'],
+          ['spine', 'lHip'], ['spine', 'rHip'],
+          ['lHip', 'lKnee'], ['lKnee', 'lAnkle'],
+          ['rHip', 'rKnee'], ['rKnee', 'rAnkle']
+        ];
+
+        bones.forEach(([j1, j2]) => {
+          if (screenJoints[j1] && screenJoints[j2]) {
+            svgContent += `<line x1="${screenJoints[j1].x.toFixed(1)}" y1="${screenJoints[j1].y.toFixed(1)}" x2="${screenJoints[j2].x.toFixed(1)}" y2="${screenJoints[j2].y.toFixed(1)}" stroke="${color}" stroke-width="1.8" stroke-linecap="round" opacity="0.85" />`;
+          }
+        });
+
+        // Draw Keypoint Joint Dots
+        for (const pt of Object.values(screenJoints)) {
+          svgContent += `<circle cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="2.4" fill="#FFFFFF" stroke="${color}" stroke-width="1.2" />`;
+        }
+      });
+
+      svg.innerHTML = svgContent;
+    }
+
+    // =========================================================================
+    // 11. WAIT TIME, FINANCIALS, SPARKLINES & STATS SYNCHRONIZATION
+    // =========================================================================
+    function calculateGlobalWaitTime() {
+      const freeTable = tables.find(t => t.state === TABLE_STATES.FREE_CLEAN.id);
+      let nextAvailableEtaSec = 0;
+
+      if (freeTable) {
+        nextAvailableEtaSec = 0;
+      } else {
+        let minTime = Infinity;
+        tables.forEach(t => {
+          let tRemaining = 0;
+          if (t.state === TABLE_STATES.WAITING_FOR_ORDER.id) {
+            tRemaining = 10 + CONFIG.timings.kitchenCookDuration + CONFIG.timings.eatingDuration + CONFIG.timings.cleaningDuration;
+          } else if (t.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+            tRemaining = CONFIG.timings.kitchenCookDuration + CONFIG.timings.eatingDuration + CONFIG.timings.cleaningDuration;
+          } else if (t.state === TABLE_STATES.EATING_SERVED.id || t.state === TABLE_STATES.BILL_REQUESTED.id) {
+            tRemaining = Math.max(0, t.eatingRemaining) + CONFIG.timings.cleaningDuration;
+          } else if (t.state === TABLE_STATES.DIRTY_UNCLEARED.id) {
+            tRemaining = CONFIG.timings.cleaningDuration;
+          }
+          if (tRemaining < minTime) minTime = tRemaining;
+        });
+        nextAvailableEtaSec = minTime === Infinity ? 0 : minTime;
+      }
+
+      const mm = String(Math.floor(nextAvailableEtaSec / 60)).padStart(2, '0');
+      const ss = String(Math.floor(nextAvailableEtaSec % 60)).padStart(2, '0');
+      document.getElementById('cctv-queue-wait').textContent = `${mm}m ${ss}s`;
+    }
+
+    function updateTopBarStats() {
+      let totalSeatedGuests = 0;
+      let busyTablesCount = 0;
+
+      tables.forEach(t => {
+        if (t.state !== TABLE_STATES.FREE_CLEAN.id) {
+          busyTablesCount++;
+          if (t.seatedParty) totalSeatedGuests += t.seatedParty.size;
+        }
+      });
+
+      // Calculate Average Wait for Order
+      let avgOrderWaitSec = 18;
+      if (STATS.totalOrderWaitTimes.length > 0) {
+        avgOrderWaitSec = Math.round(STATS.totalOrderWaitTimes.reduce((a, b) => a + b, 0) / STATS.totalOrderWaitTimes.length);
+      }
+      const oMm = String(Math.floor(avgOrderWaitSec / 60)).padStart(2, '0');
+      const oSs = String(avgOrderWaitSec % 60).padStart(2, '0');
+      const avgOrderFormatted = `${oMm}m ${oSs}s`;
+
+      // Calculate Average Wait for Food
+      let avgFoodWaitSec = 34;
+      if (STATS.totalFoodWaitTimes.length > 0) {
+        avgFoodWaitSec = Math.round(STATS.totalFoodWaitTimes.reduce((a, b) => a + b, 0) / STATS.totalFoodWaitTimes.length);
+      }
+      const fMm = String(Math.floor(avgFoodWaitSec / 60)).padStart(2, '0');
+      const fSs = String(avgFoodWaitSec % 60).padStart(2, '0');
+      const avgFoodFormatted = `${fMm}m ${fSs}s`;
+
+      // 1. UPDATE CLEAN TOP NAVBAR
+      document.getElementById('nav-clients-text').textContent = `${totalSeatedGuests} Seated`;
+      document.getElementById('nav-queue-text').textContent = `(${queueLine.length} in queue)`;
+      document.getElementById('nav-revenue-text').textContent = `$${STATS.totalRevenue.toFixed(2)}`;
+      document.getElementById('hud-today-rev').textContent = `$${STATS.totalRevenue.toFixed(2)}`;
+      document.getElementById('nav-avg-order-text').textContent = avgOrderFormatted;
+      document.getElementById('nav-avg-food-text').textContent = avgFoodFormatted;
+
+      const csatEmoji = STATS.currentCsat > 85 ? '😊' : (STATS.currentCsat > 60 ? '😐' : '😡');
+      document.getElementById('nav-csat-text').textContent = `${STATS.currentCsat}% ${csatEmoji}`;
+
+      // 2. UPDATE DRAWER REVENUE & CLIENTS METRICS
+      document.getElementById('kpi-revenue-total').textContent = `$${STATS.totalRevenue.toFixed(2)}`;
+      const avgCheck = STATS.totalPartiesCompleted > 0 ? (STATS.totalRevenue / STATS.totalPartiesCompleted) : 68.50;
+      document.getElementById('kpi-avg-check').textContent = `$${avgCheck.toFixed(2)}`;
+
+      const totalClientsDay = STATS.totalGuestsToday + totalSeatedGuests + queueLine.reduce((acc, p) => acc + p.size, 0);
+      const spendPerGuest = totalClientsDay > 0 ? (STATS.totalRevenue / totalClientsDay) : 28.40;
+      document.getElementById('kpi-spend-guest').textContent = `$${spendPerGuest.toFixed(2)}`;
+
+      document.getElementById('kpi-clients-day-total').textContent = `${totalClientsDay} Guests`;
+      document.getElementById('kpi-seated-now').textContent = `${totalSeatedGuests} Pax`;
+      document.getElementById('kpi-queue-now').textContent = `${queueLine.length} Parties`;
+
+      // 3. UPDATE DUAL WAIT TIMES
+      document.getElementById('kpi-avg-order-wait').textContent = avgOrderFormatted;
+      const poMm = String(Math.floor(STATS.peakOrderWaitObserved / 60)).padStart(2, '0');
+      const poSs = String(STATS.peakOrderWaitObserved % 60).padStart(2, '0');
+      document.getElementById('kpi-peak-order-wait').textContent = `${poMm}m ${poSs}s`;
+
+      document.getElementById('kpi-avg-food-wait').textContent = avgFoodFormatted;
+      const pfMm = String(Math.floor(STATS.peakFoodWaitObserved / 60)).padStart(2, '0');
+      const pfSs = String(STATS.peakFoodWaitObserved % 60).padStart(2, '0');
+      document.getElementById('kpi-peak-food-wait').textContent = `${pfMm}m ${pfSs}s`;
+
+      const pendingOrders = tables.filter(t => t.state === TABLE_STATES.WAITING_FOR_ORDER.id || t.state === TABLE_STATES.WAITING_FOR_FOOD.id).length;
+      document.getElementById('hud-waiter-backlog').textContent = `${pendingOrders} Orders Pending`;
+
+      // 4. CSAT METRICS
+      document.getElementById('kpi-csat-big').textContent = `${STATS.currentCsat}%`;
+      document.getElementById('kpi-csat-bar').style.width = `${STATS.currentCsat}%`;
+      document.getElementById('kpi-csat-bar').style.backgroundColor = STATS.currentCsat > 80 ? '#10B981' : (STATS.currentCsat > 50 ? '#F59E0B' : '#EF4444');
+      document.getElementById('csat-mood-badge').textContent = `${csatEmoji} ${STATS.currentCsat}% CSAT`;
+
+      document.getElementById('kpi-sla-breaches').textContent = STATS.slaBreaches;
+      const angryCount = tables.filter(t => t.angerLevel === 3 && (t.state === TABLE_STATES.WAITING_FOR_ORDER.id || t.state === TABLE_STATES.WAITING_FOR_FOOD.id)).length;
+      document.getElementById('kpi-angry-count').textContent = angryCount;
+      document.getElementById('dt-queue-badge').textContent = `${queueLine.length} In Line`;
+
+      // 5. UPDATE AI COPILOT RECOMMENDATION
+      const copilotEl = document.getElementById('ai-copilot-text');
+      if (pendingOrders >= 3 || queueLine.length >= 3) {
+        copilotEl.innerHTML = `⚠️ <strong>High Traffic Alert:</strong> Backlog is ${pendingOrders} orders with ${queueLine.length} parties queued. Rover AGV prioritized for runner delivery to safeguard SLA compliance.`;
+      } else {
+        copilotEl.innerHTML = `⚡ <strong>Staff Allocation Balanced:</strong> Rover AGV active for runner support. Wait times within healthy SLA targets (&lt;30s order, &lt;60s food).`;
+      }
+
+      // 6. UPDATE SVG SPARKLINE CHARTS
+      renderWaitTimeSparkline();
+    }
+
+    function renderWaitTimeSparkline() {
+      const svg = document.getElementById('sparkline-svg');
+      if (!svg) return;
+
+      const orderData = STATS.totalOrderWaitTimes.slice(-10);
+      const foodData = STATS.totalFoodWaitTimes.slice(-10);
+
+      // Max scale reference 60s
+      const maxVal = 60;
+      const w = 280;
+      const h = 50;
+
+      const getPoints = (arr) => {
+        return arr.map((val, i) => {
+          const x = (i / Math.max(1, arr.length - 1)) * w;
+          const y = h - (Math.min(maxVal, val) / maxVal) * (h - 8) - 4;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+      };
+
+      const orderPoly = getPoints(orderData);
+      const foodPoly = getPoints(foodData);
+
+      svg.innerHTML = `
+        <line x1="0" y1="${h * 0.5}" x2="${w}" y2="${h * 0.5}" stroke="#E2E8F0" stroke-dasharray="3, 3" stroke-width="1" />
+        <polyline fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${orderPoly}" />
+        <polyline fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${foodPoly}" />
+      `;
+    }
+
+    // =========================================================================
+    // 12. DRAWER & UI LOGIC
+    // =========================================================================
+    function toggleDashboardDrawer(show) {
+      const drawer = document.getElementById('top-dashboard-drawer');
+      const inner = document.getElementById('drawer-inner');
+
+      const shouldOpen = show !== undefined ? show : !CONFIG.isDrawerOpen;
+      CONFIG.isDrawerOpen = shouldOpen;
+
+      if (shouldOpen) {
+        drawer.classList.remove('invisible', 'opacity-0');
+        drawer.classList.add('visible', 'opacity-100');
+        inner.classList.remove('-translate-y-8');
+        inner.classList.add('translate-y-0');
+        updateTopBarStats();
+        updateSelectedTableCard();
+        renderQueueUI();
+      } else {
+        drawer.classList.remove('visible', 'opacity-100');
+        drawer.classList.add('invisible', 'opacity-0');
+        inner.classList.remove('translate-y-0');
+        inner.classList.add('-translate-y-8');
+      }
+    }
+
+    function renderQueueUI() {
+      const drawerList = document.getElementById('drawer-queue-list');
+      if (!drawerList) return;
+
+      if (queueLine.length === 0) {
+        drawerList.innerHTML = `<div class="text-xs text-slate-500 italic py-2">No groups waiting at stanchions.</div>`;
+        return;
+      }
+
+      drawerList.innerHTML = queueLine.map((p, idx) => `
+        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs shadow-sm">
+          <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+            <span class="font-mono text-slate-900 font-semibold">Party #${p.id}</span>
+            <span class="text-slate-500 font-tabular">(${p.size} guests • $${p.billAmount.toFixed(0)})</span>
+          </div>
+          <span class="font-mono text-emerald-700 font-semibold font-tabular">#${idx + 1} next</span>
+        </div>
+      `).join('');
+    }
+
+    function updateSelectedTableCard() {
+      const table = tables.find(t => t.id === CONFIG.selectedTableId);
+      if (!table) return;
+
+      document.getElementById('dt-table-id').textContent = table.code;
+      document.getElementById('dt-state-badge').textContent = table.state;
+      document.getElementById('dt-state-badge').style.backgroundColor = `${table.stateDef.color}20`;
+      document.getElementById('dt-state-badge').style.color = table.stateDef.color;
+      document.getElementById('dt-state-dot').style.backgroundColor = table.stateDef.color;
+
+      document.getElementById('dt-pax').textContent = `${table.seatedParty ? table.seatedParty.size : 0} Guests`;
+      document.getElementById('dt-bill-amount').textContent = `$${table.currentBill.toFixed(2)}`;
+      document.getElementById('dt-dishes').textContent = table.dishesGroup.visible ? 'Yes (Detected)' : 'No';
+      document.getElementById('dt-puck-color').textContent = table.stateDef.color;
+
+      const oSec = Math.floor(table.orderWaitTimer);
+      const oMm = String(Math.floor(oSec / 60)).padStart(2, '0');
+      const oSs = String(oSec % 60).padStart(2, '0');
+      document.getElementById('dt-order-timer').textContent = `${oMm}:${oSs}`;
+
+      const fSec = Math.floor(table.foodWaitTimer);
+      const fMm = String(Math.floor(fSec / 60)).padStart(2, '0');
+      const fSs = String(fSec % 60).padStart(2, '0');
+      document.getElementById('dt-food-timer').textContent = `${fMm}:${fSs}`;
+
+      const patienceBar = document.getElementById('dt-patience-bar');
+      const patienceText = document.getElementById('dt-patience-text');
+
+      if (table.state === TABLE_STATES.WAITING_FOR_ORDER.id || table.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+        const mood = ANGER_LEVELS[table.angerLevel];
+        patienceBar.style.width = `${table.patience}%`;
+        patienceBar.style.backgroundColor = mood.color;
+        patienceText.textContent = `${table.patience}% ${mood.emoji} ${mood.name}`;
+        patienceText.style.color = mood.color;
+      } else {
+        patienceBar.style.width = `100%`;
+        patienceBar.style.backgroundColor = '#10B981';
+        patienceText.textContent = '100% 😊 Relaxed';
+        patienceText.style.color = '#10B981';
+      }
+    }
+
+    function logMqtt(topic, payload) {
+      const drawerTerminal = document.getElementById('mqtt-terminal-drawer');
+      const timeStr = new Date().toISOString().substring(11, 19);
+
+      const logRow = `
+        <div class="hover:bg-slate-100 p-1 rounded font-mono text-[10px]">
+          <span class="text-slate-400">[${timeStr}]</span>
+          <span class="text-blue-600 font-semibold">${topic}</span>:
+          <span class="text-slate-800">${JSON.stringify(payload)}</span>
+        </div>
+      `;
+
+      if (drawerTerminal) {
+        drawerTerminal.insertAdjacentHTML('afterbegin', logRow);
+        if (drawerTerminal.children.length > 50) drawerTerminal.lastElementChild.remove();
+      }
+    }
+
+    // =========================================================================
+    // 13. MULTI-CAMERA SWITCHING & USER CONTROLS
+    // =========================================================================
+    function setCameraMode(mode) {
+      CONFIG.currentCameraMode = mode;
+      const quadGrid = document.getElementById('cctv-quad-container');
+      const cctvHud = document.getElementById('cctv-hud');
+      const reticle = document.getElementById('cctv-reticle');
+      const channelText = document.getElementById('cam-channel-text');
+
+      // Reset camera button styles
+      document.querySelectorAll('.cam-switch-btn').forEach(b => {
+        b.className = 'cam-switch-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition hover:bg-slate-100 flex items-center space-x-1 active:scale-[0.98]';
+      });
+
+      if (mode === 'CAM-01') {
+        activeCamera = cctvCamera1;
+        controls.enabled = false;
+        cctvHud.style.opacity = '1';
+        reticle.style.display = 'flex';
+        quadGrid.classList.add('hidden');
+        cctvRigGroup.visible = false;
+        cameraFrustumCone.visible = false;
+        channelText.textContent = 'CAM-01 [CEILING_AI_FEED]';
+        document.getElementById('btn-cam-cctv1').className = 'cam-switch-btn px-2.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm flex items-center space-x-1 active:scale-[0.98]';
+      } else if (mode === 'CAM-02') {
+        activeCamera = cctvCamera2;
+        controls.enabled = false;
+        cctvHud.style.opacity = '1';
+        reticle.style.display = 'none';
+        quadGrid.classList.add('hidden');
+        cctvRigGroup.visible = true;
+        cameraFrustumCone.visible = false;
+        channelText.textContent = 'CAM-02 [KITCHEN_PASS_DISPATCH]';
+        document.getElementById('btn-cam-cctv2').className = 'cam-switch-btn px-2.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm flex items-center space-x-1 active:scale-[0.98]';
+      } else if (mode === 'CAM-03') {
+        activeCamera = cctvCamera3;
+        controls.enabled = false;
+        cctvHud.style.opacity = '1';
+        reticle.style.display = 'none';
+        quadGrid.classList.add('hidden');
+        cctvRigGroup.visible = true;
+        cameraFrustumCone.visible = false;
+        channelText.textContent = 'CAM-03 [ENTRANCE_QUEUE_HOST]';
+        document.getElementById('btn-cam-cctv3').className = 'cam-switch-btn px-2.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm flex items-center space-x-1 active:scale-[0.98]';
+      } else if (mode === 'QUAD') {
+        controls.enabled = false;
+        cctvHud.style.opacity = '0';
+        quadGrid.classList.remove('hidden');
+        cctvRigGroup.visible = true;
+        cameraFrustumCone.visible = false;
+        document.getElementById('btn-cam-quad').className = 'cam-switch-btn px-2.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm flex items-center space-x-1 active:scale-[0.98]';
+      } else if (mode === 'ORBIT') {
+        activeCamera = orbitCamera;
+        controls.enabled = true;
+        cctvHud.style.opacity = '0';
+        quadGrid.classList.add('hidden');
+        cctvRigGroup.visible = true;
+        cameraFrustumCone.visible = true;
+        document.getElementById('btn-cam-orbit').className = 'cam-switch-btn px-2.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm flex items-center space-x-1 active:scale-[0.98]';
+      }
+    }
+
+    function setupEventListeners() {
+      // Camera switchers
+      document.getElementById('btn-cam-cctv1').addEventListener('click', () => setCameraMode('CAM-01'));
+      document.getElementById('btn-cam-cctv2').addEventListener('click', () => setCameraMode('CAM-02'));
+      document.getElementById('btn-cam-cctv3').addEventListener('click', () => setCameraMode('CAM-03'));
+      document.getElementById('btn-cam-quad').addEventListener('click', () => setCameraMode('QUAD'));
+      document.getElementById('btn-cam-orbit').addEventListener('click', () => setCameraMode('ORBIT'));
+
+      // Pose Keypoint Skeleton Toggle
+      const btnPose = document.getElementById('btn-toggle-pose');
+      btnPose.addEventListener('click', () => {
+        CONFIG.showPoseSkeletons = !CONFIG.showPoseSkeletons;
+        document.getElementById('pose-toggle-label').textContent = CONFIG.showPoseSkeletons ? '🦴 Pose: ON' : '🦴 Pose: OFF';
+        btnPose.className = CONFIG.showPoseSkeletons
+          ? 'px-2.5 py-1.5 rounded-lg border border-cyan-400 bg-cyan-50 text-cyan-800 transition active:scale-[0.98]'
+          : 'px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition active:scale-[0.98]';
+      });
+
+      // Spatial Heatmap Toggle
+      const btnHeat = document.getElementById('btn-toggle-heatmap');
+      btnHeat.addEventListener('click', () => {
+        CONFIG.showHeatmap = !CONFIG.showHeatmap;
+        heatmapMesh.visible = CONFIG.showHeatmap;
+        document.getElementById('heatmap-toggle-label').textContent = CONFIG.showHeatmap ? '🔥 Heatmap: ON' : '🔥 Heatmap: OFF';
+        btnHeat.className = CONFIG.showHeatmap
+          ? 'px-2.5 py-1.5 rounded-lg border border-rose-400 bg-rose-50 text-rose-800 transition active:scale-[0.98]'
+          : 'px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition active:scale-[0.98]';
+      });
+
+      // Audio Toggle (if element exists)
+      const btnAudio = document.getElementById('btn-toggle-audio');
+      if (btnAudio) {
+        btnAudio.addEventListener('click', () => {
+          CONFIG.audioEnabled = !CONFIG.audioEnabled;
+          const label = document.getElementById('audio-label');
+          if (label) label.textContent = CONFIG.audioEnabled ? '🔊 Audio: ON' : '🔇 Audio: OFF';
+          if (CONFIG.audioEnabled) playBellSound();
+        });
+      }
+
+      // Dashboard Drawer Triggers
+      document.getElementById('btn-toggle-dashboard').addEventListener('click', () => toggleDashboardDrawer(true));
+      document.getElementById('btn-close-drawer').addEventListener('click', () => toggleDashboardDrawer(false));
+
+      document.getElementById('top-dashboard-drawer').addEventListener('click', (e) => {
+        if (e.target.id === 'top-dashboard-drawer') toggleDashboardDrawer(false);
+      });
+
+      // Speed buttons
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const speed = parseFloat(e.target.dataset.speed);
+          CONFIG.timeScale = speed;
+          document.querySelectorAll('.speed-btn').forEach(b => {
+            b.classList.remove('bg-blue-600', 'text-white');
+            b.classList.add('text-slate-500');
+          });
+          e.target.classList.remove('text-slate-500');
+          e.target.classList.add('bg-blue-600', 'text-white');
+        });
+      });
+
+      // Quick Party Spawn
+      document.getElementById('btn-quick-spawn').addEventListener('click', spawnCustomerParty);
+      document.getElementById('dt-btn-spawn-party').addEventListener('click', spawnCustomerParty);
+
+      // Rush Hour Toggle
+      const rushBtn = document.getElementById('btn-quick-rush');
+      const rushText = document.getElementById('rush-text');
+      let rushInterval = null;
+
+      rushBtn.addEventListener('click', () => {
+        CONFIG.rushHour = !CONFIG.rushHour;
+        if (CONFIG.rushHour) {
+          rushBtn.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold border border-amber-500 bg-amber-500 text-white transition active:scale-[0.98] shadow-sm';
+          rushText.textContent = '🔥 Rush: ON';
+          rushInterval = setInterval(spawnCustomerParty, CONFIG.timings.rushHourInterval * 1000);
+          spawnCustomerParty();
+        } else {
+          rushBtn.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition active:scale-[0.98]';
+          rushText.textContent = '🔥 Rush: OFF';
+          clearInterval(rushInterval);
+        }
+      });
+
+      // Clear Log
+      document.getElementById('dt-btn-clear-log').addEventListener('click', () => {
+        document.getElementById('mqtt-terminal-drawer').innerHTML = '';
+      });
+
+      // Drawer Table Selector Pills
+      document.querySelectorAll('.t-pill-drawer').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+          const tid = parseInt(e.target.dataset.tid, 10);
+          CONFIG.selectedTableId = tid;
+          playPuckClick();
+
+          document.querySelectorAll('.t-pill-drawer').forEach(p => {
+            p.className = 't-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-white border-slate-200 text-slate-700 hover:border-slate-300';
+          });
+          e.target.className = 't-pill-drawer py-2 rounded-xl text-xs font-mono font-bold border transition text-center bg-blue-600 border-blue-500 text-white shadow-sm';
+
+          updateSelectedTableCard();
+        });
+      });
+
+      // Drawer Table Direct Action Buttons
+      document.getElementById('dt-act-take-order').addEventListener('click', () => {
+        playPuckClick();
+        const table = tables.find(t => t.id === CONFIG.selectedTableId);
+        if (table && table.state === TABLE_STATES.WAITING_FOR_ORDER.id) {
+          STATS.totalOrderWaitTimes.push(table.orderWaitTimer);
+          setTableState(table, TABLE_STATES.WAITING_FOR_FOOD.id);
+          logMqtt('iot/manual_override', { table: table.code, action: 'FORCE_TAKE_ORDER' });
+        }
+      });
+
+      document.getElementById('dt-act-serve-food').addEventListener('click', () => {
+        playPuckClick();
+        const table = tables.find(t => t.id === CONFIG.selectedTableId);
+        if (table && table.state === TABLE_STATES.WAITING_FOR_FOOD.id) {
+          STATS.totalFoodWaitTimes.push(table.foodWaitTimer);
+          setTableState(table, TABLE_STATES.EATING_SERVED.id);
+          logMqtt('iot/manual_override', { table: table.code, action: 'FORCE_SERVE_FOOD' });
+        }
+      });
+
+      document.getElementById('dt-act-req-bill').addEventListener('click', () => {
+        playPuckClick();
+        const table = tables.find(t => t.id === CONFIG.selectedTableId);
+        if (table && table.state === TABLE_STATES.EATING_SERVED.id) {
+          setTableState(table, TABLE_STATES.BILL_REQUESTED.id);
+        }
+      });
+
+      document.getElementById('dt-act-mark-clean').addEventListener('click', () => {
+        playPuckClick();
+        const table = tables.find(t => t.id === CONFIG.selectedTableId);
+        if (table) setTableState(table, TABLE_STATES.FREE_CLEAN.id);
+      });
+
+      // Sliders
+      document.getElementById('slider-waiter-speed').addEventListener('input', (e) => {
+        CONFIG.waiterSpeed = parseFloat(e.target.value);
+        document.getElementById('val-waiter-speed').textContent = `${CONFIG.waiterSpeed.toFixed(1)}x`;
+      });
+
+      document.getElementById('slider-cook-time').addEventListener('input', (e) => {
+        CONFIG.timings.kitchenCookDuration = parseInt(e.target.value, 10);
+        document.getElementById('val-cook-time').textContent = `${CONFIG.timings.kitchenCookDuration} seconds`;
+      });
+
+      // Global Keyboard Shortcuts
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'd' || e.key === 'D') toggleDashboardDrawer();
+        if (e.key === 'Escape' && CONFIG.isDrawerOpen) toggleDashboardDrawer(false);
+        if (e.key === '1') setCameraMode('CAM-01');
+        if (e.key === '2') setCameraMode('CAM-02');
+        if (e.key === '3') setCameraMode('CAM-03');
+        if (e.key === '4') setCameraMode('QUAD');
+        if (e.key === 'o' || e.key === 'O') setCameraMode('ORBIT');
+        if (e.key === ' ') { e.preventDefault(); spawnCustomerParty(); }
+      });
+
+      // Mouse Spotlight Tracking
+      document.addEventListener('mousemove', (e) => {
+        document.querySelectorAll('.spotlight-card').forEach(card => {
+          const rect = card.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          card.style.setProperty('--mouse-x', `${x}px`);
+          card.style.setProperty('--mouse-y', `${y}px`);
+        });
+      });
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('viewport-container');
+      viewportWidth = container.clientWidth;
+      viewportHeight = container.clientHeight;
+
+      [cctvCamera1, cctvCamera2, cctvCamera3, orbitCamera].forEach(cam => {
+        cam.aspect = viewportWidth / viewportHeight;
+        cam.updateProjectionMatrix();
+      });
+
+      renderer.setSize(viewportWidth, viewportHeight);
+    }
+
+    // =========================================================================
+    // 14. MULTI-VIEWPORT RENDERING & ANIMATION LOOP
+    // =========================================================================
+    let frameCount = 0;
+    let lastFpsUpdate = 0;
+
+    function renderScene() {
+      if (CONFIG.currentCameraMode !== 'QUAD') {
+        // Single Fullscreen Viewport
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, viewportWidth, viewportHeight);
+        renderer.render(scene, activeCamera);
+      } else {
+        // 4-Camera CCTV Matrix Grid (2x2 Split Viewport)
+        const halfW = Math.floor(viewportWidth / 2);
+        const halfH = Math.floor(viewportHeight / 2);
+
+        renderer.setScissorTest(true);
+
+        // Quad 1: Top-Left (CAM-01: Ceiling AI)
+        cctvCamera1.aspect = halfW / halfH;
+        cctvCamera1.updateProjectionMatrix();
+        renderer.setViewport(0, halfH, halfW, halfH);
+        renderer.setScissor(0, halfH, halfW, halfH);
+        renderer.render(scene, cctvCamera1);
+
+        // Quad 2: Top-Right (CAM-02: Kitchen Pass)
+        cctvCamera2.aspect = halfW / halfH;
+        cctvCamera2.updateProjectionMatrix();
+        renderer.setViewport(halfW, halfH, halfW, halfH);
+        renderer.setScissor(halfW, halfH, halfW, halfH);
+        renderer.render(scene, cctvCamera2);
+
+        // Quad 3: Bottom-Left (CAM-03: Entrance Queue)
+        cctvCamera3.aspect = halfW / halfH;
+        cctvCamera3.updateProjectionMatrix();
+        renderer.setViewport(0, 0, halfW, halfH);
+        renderer.setScissor(0, 0, halfW, halfH);
+        renderer.render(scene, cctvCamera3);
+
+        // Quad 4: Bottom-Right (CAM-04: Orbit Patrol)
+        orbitCamera.aspect = halfW / halfH;
+        orbitCamera.updateProjectionMatrix();
+        renderer.setViewport(halfW, 0, halfW, halfH);
+        renderer.setScissor(halfW, 0, halfW, halfH);
+        renderer.render(scene, orbitCamera);
+
+        renderer.setScissorTest(false);
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.1);
+      const elapsedTime = clock.getElapsedTime();
+
+      // Controls update for orbit
+      if ((CONFIG.currentCameraMode === 'ORBIT' || CONFIG.currentCameraMode === 'QUAD') && controls) {
+        controls.update();
+      }
+
+      // Simulation steps
+      updateMultiAgentSimulation(delta);
+      updateCvBoundingBoxes();
+
+      // Render 3D Scene
+      renderScene();
+
+      // Periodically sync UI stats & clock
+      frameCount++;
+      if (elapsedTime - lastFpsUpdate >= 0.5) {
+        const fps = Math.round((frameCount / (elapsedTime - lastFpsUpdate)) * 10) / 10;
+        document.getElementById('fps-display').textContent = `${fps.toFixed(1)} FPS`;
+        frameCount = 0;
+        lastFpsUpdate = elapsedTime;
+
+        const now = new Date();
+        document.getElementById('cctv-clock').textContent = now.toISOString().replace('T', ' ').substring(0, 19);
+
+        updateTopBarStats();
+        if (CONFIG.isDrawerOpen) {
+          updateSelectedTableCard();
+        }
+      }
+    }
+
+    // =========================================================================
+    // 15. INITIALIZATION SEQUENCE & SEED SIMULATION
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      initThree();
+      setupEventListeners();
+
+      // Initial customers in restaurant
+      spawnCustomerParty();
+      setTimeout(spawnCustomerParty, 1200);
+
+      setTimeout(() => {
+        if (tables[0] && tables[0].state === TABLE_STATES.FREE_CLEAN.id) {
+          dispatchQueueToAvailableTable();
+        }
+        if (tables[1] && tables[1].state === TABLE_STATES.FREE_CLEAN.id) {
+          dispatchQueueToAvailableTable();
+        }
+      }, 800);
+
+      animate();
+
+      logMqtt('system/boot', {
+        status: 'OMNISIGHT_TWIN_READY',
+        cameras_active: ['CAM_01', 'CAM_02', 'CAM_03', 'CAM_04'],
+        robotics_status: 'BELLABOT_ROVER_ONLINE',
+        audio_synthesizer: 'WEBAUDIO_READY'
+      });
+    });
+
+  </script>
+</body>
+</html>
